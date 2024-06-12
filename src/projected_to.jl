@@ -62,12 +62,13 @@ function Base.show(io::IO, prj::ProjectedTo)
     print(io, ")")
 end
 
-Base.@kwdef struct ProjectionParameters{I,S,T,P,E}
+Base.@kwdef struct ProjectionParameters{I,S,T,P,E,B}
     niterations::I = 100
     nsamples::S = 2000
     tolerance::T = 1e-6
     stepsize::P = ConstantStepsize(0.1)
     seed::E = 42
+    usebuffer::B = Val(true)
 end
 
 const DefaultProjectionParameters = ProjectionParameters()
@@ -77,6 +78,21 @@ getnsamples(parameters::ProjectionParameters) = parameters.nsamples
 gettolerance(parameters::ProjectionParameters) = parameters.tolerance
 getstepsize(parameters::ProjectionParameters) = parameters.stepsize
 getseed(parameters::ProjectionParameters) = parameters.seed
+
+with_buffer(f::F, parameters::ProjectionParameters) where {F} =
+    with_buffer(f, parameters.usebuffer, parameters)
+
+with_buffer(f::F, ::Val{false}, parameters::ProjectionParameters) where {F} = f(nothing)
+with_buffer(f::F, ::Val{true}, parameters::ProjectionParameters) where {F} =
+    let buffer = MallocSlabBuffer()
+        try
+            f(buffer)
+        catch exception
+            rethrow(exception)
+        finally
+            free(buffer)
+        end
+    end
 
 function Manopt.get_stopping_criterion(parameters::ProjectionParameters)
     stopping = StopAfterIteration(getniterations(parameters))
@@ -96,17 +112,16 @@ function project_to(prj::ProjectedTo, f::F) where {F}
     parameters = get_projected_to_parameters(prj)
     M = get_projected_to_manifold(prj)
     seed = getseed(parameters)
-    srng = StableRNG(seed)
-    p0 = rand(srng, M)
+    rng = StableRNG(seed)
+    initialpoint = rand(rng, M)
 
     nsamples = getnsamples(parameters)
-    samples = rand(srng, convert(ExponentialFamilyDistribution, M, p0), nsamples)
-    logpdfs = zeros(eltype(p0), nsamples)
-    sufficientstatistics = zeros(eltype(p0), length(p0), nsamples)
+    samples = rand(rng, convert(ExponentialFamilyDistribution, M, initialpoint), nsamples)
+    logpdfs = zeros(eltype(initialpoint), nsamples)
+    sufficientstatistics = zeros(eltype(initialpoint), length(initialpoint), nsamples)
     gradsamples = similar(sufficientstatistics)
 
-    buffer = MallocSlabBuffer()
-    try
+    return with_buffer(parameters) do buffer
         state = ControlVariateStrategyState(
             samples = samples,
             logpdfs = logpdfs,
@@ -116,20 +131,18 @@ function project_to(prj::ProjectedTo, f::F) where {F}
         strategy = ControlVariateStrategy(
             nsamples = nsamples,
             seed = seed,
-            rng = srng,
+            rng = rng,
             state = state,
-            buffer = buffer,
         )
 
-        inplacef = convert(InplaceLogpdf, f)
-        g_grad_g! = CVICostGradientObjective(inplacef, strategy)
+        g_grad_g! = CVICostGradientObjective(f, strategy, buffer)
         objective =
             ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 
         q = gradient_descent!(
             M,
             objective,
-            p0;
+            initialpoint;
             stopping_criterion = get_stopping_criterion(parameters),
             stepsize = getstepsize(parameters),
             debug = missing,
@@ -139,10 +152,6 @@ function project_to(prj::ProjectedTo, f::F) where {F}
             get_projected_to_type(prj),
             convert(ExponentialFamilyDistribution, M, q),
         )
-    catch e
-        rethrow(e)
-    finally
-        free(buffer)
     end
 end
 

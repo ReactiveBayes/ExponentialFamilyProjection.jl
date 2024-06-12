@@ -60,15 +60,88 @@
 end
 
 @testitem "ProjectionParameters structure" begin
-    import ExponentialFamilyProjection: getniterations, getnsamples
+    import ExponentialFamilyProjection: getniterations, getnsamples, gettolerance, getseed
 
     niterations = rand(Int)
     nsamples = rand(Int)
+    tolerance = rand(Float64)
+    seed = rand(UInt)
 
-    parameters = ProjectionParameters(niterations = niterations, nsamples = nsamples)
+    parameters = ProjectionParameters(
+        niterations = niterations,
+        nsamples = nsamples,
+        tolerance = tolerance,
+        seed = seed,
+    )
 
     @test getniterations(parameters) === niterations
     @test getnsamples(parameters) === nsamples
+    @test gettolerance(parameters) === tolerance
+    @test getseed(parameters) === seed
+end
+
+@testitem "ProjectionParameters usebuffer" begin
+    using Bumper
+    import ExponentialFamilyProjection: getstepsize, with_buffer
+
+    parameters = ProjectionParameters(usebuffer = Val(true))
+
+    result = with_buffer(parameters) do buffer
+        @test buffer !== nothing
+        @no_escape buffer begin
+            container = @alloc(Float64, 10)
+            @test length(container) === 10
+        end
+        return "asd"
+    end
+    @test result == "asd"
+
+    parameters = ProjectionParameters(usebuffer = Val(false))
+
+    result = with_buffer(parameters) do buffer
+        @test buffer === nothing
+        return "dsa"
+    end
+    @test result == "dsa"
+
+end
+
+@testitem "Projection result should not depend on the usage of buffer" begin
+    using ExponentialFamily, BayesBase
+    distributions = [
+        Beta(10, 10),
+        Gamma(10, 10),
+        Exponential(1),
+        LogNormal(0, 1),
+        Dirichlet([ 1, 1 ]),
+        NormalMeanVariance(0.0, 1.0),
+        MvNormalMeanCovariance([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
+    ]
+
+    for distribution in distributions
+        parameters_with_buffer = ProjectionParameters(usebuffer = Val(true))
+        parameters_without_buffer = ProjectionParameters(usebuffer = Val(false))
+
+        dims = size(rand(distribution))
+
+        prj_with_buffer = ProjectedTo(
+            ExponentialFamily.exponential_family_typetag(distribution),
+            dims...;
+            parameters = parameters_with_buffer,
+        )
+        prj_without_buffer = ProjectedTo(
+            ExponentialFamily.exponential_family_typetag(distribution),
+            dims...;
+            parameters = parameters_without_buffer,
+        )
+
+        targetfn = (x) -> logpdf(distribution, x)
+        result_with_buffer = project_to(prj_with_buffer, targetfn)
+        result_without_buffer = project_to(prj_without_buffer, targetfn)
+
+        # Small differences are allowed due to different LinearAlgebra routines
+        @test result_with_buffer ≈ result_without_buffer
+    end
 end
 
 @testitem "test_convergence_to_stable_point" begin

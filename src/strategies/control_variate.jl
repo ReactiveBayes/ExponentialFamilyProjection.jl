@@ -2,18 +2,17 @@ using StableRNGs, LoopVectorization, Bumper
 
 import BayesBase: InplaceLogpdf
 
-Base.@kwdef struct ControlVariateStrategy{S,D,N,T,B}
+Base.@kwdef struct ControlVariateStrategy{S,D,N,T}
     nsamples::S = 100
     seed::D = 42
     rng::N = StableRNG(seed)
     state::T = nothing
-    buffer::B = nothing
 end
 
 getnsamples(strategy::ControlVariateStrategy) = strategy.nsamples
 getseed(strategy::ControlVariateStrategy) = strategy.seed
 getrng(strategy::ControlVariateStrategy) = strategy.rng
-getbuffer(strategy::ControlVariateStrategy) = strategy.buffer
+getstate(strategy::ControlVariateStrategy) = strategy.state
 
 function prepare_state!(
     strategy::ControlVariateStrategy,
@@ -21,7 +20,7 @@ function prepare_state!(
     distribution,
 ) where {F}
     return prepare_state!(
-        strategy.state,
+        getstate(strategy),
         strategy,
         convert(InplaceLogpdf, targetfn),
         distribution,
@@ -119,6 +118,7 @@ __control_variate_fast_pack_parameters(t::NTuple{N,<:Number}) where {N} = t
 __control_variate_fast_pack_parameters(t) = ExponentialFamily.pack_parameters(t)
 
 function compute_cost(
+    obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     η,
@@ -134,6 +134,66 @@ function compute_cost(
 end
 
 function compute_gradient!(
+    obj::CVICostGradientObjective,
+    strategy::ControlVariateStrategy,
+    state::ControlVariateStrategyState,
+    X,
+    η,
+    logpartition,
+    gradlogpartition,
+    inv_fisher,
+)
+    buffer = get_cvi_buffer(obj)
+    if isnothing(buffer)
+        return control_variate_compute_gradient!(
+            obj,
+            strategy,
+            state,
+            X,
+            η,
+            logpartition,
+            gradlogpartition,
+            inv_fisher,
+        )
+    else
+        return control_variate_compute_gradient_buffered!(
+            obj,
+            strategy,
+            state,
+            X,
+            η,
+            logpartition,
+            gradlogpartition,
+            inv_fisher,
+        )
+    end
+end
+
+function control_variate_compute_gradient!(
+    obj::CVICostGradientObjective,
+    strategy::ControlVariateStrategy,
+    state::ControlVariateStrategyState,
+    X,
+    η,
+    logpartition,
+    gradlogpartition,
+    inv_fisher,
+)
+
+    cov_matrix = cov(state.sufficientstatistics', state.gradsamples')
+    corr_matrix = cov_matrix * inv_fisher
+    mean_sufficientstats = @view(mean(state.sufficientstatistics, dims = 2)[:, 1])
+    mean_gradsamples = @view(mean(state.gradsamples, dims = 2)[:, 1])
+
+    estimated_grad_vector =
+        mean_gradsamples - corr_matrix * (mean_sufficientstats - gradlogpartition)
+    X .= (η - inv_fisher * estimated_grad_vector)
+
+    return X
+end
+
+function control_variate_compute_gradient_buffered!(
+    obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     X,
@@ -145,11 +205,12 @@ function compute_gradient!(
     # This code is a bit involved, more comments are added
     # The `@no_escape` macro simplifies writing non-allocating code, it allows 
     # to create intermediate buffers which will be freed immediatelly upon exiting the block 
-    # uses the `state.buffer` so buffer must be relatively big
-    @no_escape strategy.buffer begin
+    # uses the buffer from `get_cvi_buffer(obj)` so buffer must be relatively big
+    buffer = get_cvi_buffer(obj)
+    @no_escape buffer begin
 
         # First we compute the `cov` between `state.sufficientstatistics'` and `state.gradsamples'`
-        # The naive code would be simply `cov_matrix = cov(cache.sufficientstatistics', cache.gradsamples')`
+        # The naive code would be simply `cov_matrix = cov(state.sufficientstatistics', state.gradsamples')`
         # but it allocates A LOT, especially when we have a lot of samples, so instead we preallocate the space 
         # using the `@alloc` macro and call inplace `cov!`
         # --
@@ -158,7 +219,12 @@ function compute_gradient!(
             size(state.sufficientstatistics, 1),
             size(state.gradsamples, 1)
         )
-        cov!(strategy.buffer, cov_matrix, state.sufficientstatistics', state.gradsamples')
+        control_variate_cov_buffered!(
+            buffer,
+            cov_matrix,
+            state.sufficientstatistics',
+            state.gradsamples',
+        )
         # --
 
         # Next we compute the `corr_matrix` using the sample principle, preallocate the storage
@@ -174,8 +240,8 @@ function compute_gradient!(
 
         # Compute means of sufficientstatistics and gradsamples inplace
         # The naive code would be 
-        # `mean_vector = mean(cache.sufficientstatistics, dims = 2)[:, 1]`
-        # `mean_gradsamples = mean(cache.gradsamples, dims = 2)`
+        # `mean_sufficientstats = mean(cache.sufficientstatistics, dims = 2)[:, 1]`
+        # `mean_gradsamples = mean(cache.gradsamples, dims = 2)[:, 1]`
         # --
         mean_sufficientstats =
             @alloc(eltype(state.sufficientstatistics), size(state.sufficientstatistics, 1))
@@ -207,12 +273,7 @@ function compute_gradient!(
     return X
 end
 
-"""
-    cov!(cache::CVIObjectiveCache, Z, X, Y)
-
-Computes `cov(X, Y)` where both `X` and `Y` are matrices and stores the result in `Z`. Uses intermediate storage from `buffer` in `state`.
-"""
-function cov!(buffer, Z, X, Y)
+function control_variate_cov_buffered!(buffer, Z, X, Y)
 
     @no_escape buffer begin
         _cov_tmp1 = @alloc(eltype(X), size(X, 2))

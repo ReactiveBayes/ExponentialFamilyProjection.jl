@@ -36,19 +36,6 @@
         @test getrng(strategy) !== rng1
         @test getrng(strategy) === rng2
     end
-
-    @testset "buffer" begin
-        buffer = nothing
-        strategy = ControlVariateStrategy(buffer = buffer)
-
-        @test getbuffer(strategy) === buffer
-
-        buffer = SlabBuffer()
-        strategy = ControlVariateStrategy(buffer = buffer)
-
-        @test getbuffer(strategy) === buffer
-    end
-
 end
 
 @testitem "ControlVariateStrategy prepare state" begin

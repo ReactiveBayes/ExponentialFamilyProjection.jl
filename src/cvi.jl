@@ -1,11 +1,13 @@
 
-struct CVICostGradientObjective{F,S}
+struct CVICostGradientObjective{F,S,B}
     targetfn::F
     strategy::S
+    buffer::B
 end
 
 get_cvi_targetfn(obj::CVICostGradientObjective) = obj.targetfn
 get_cvi_strategy(obj::CVICostGradientObjective) = obj.strategy
+get_cvi_buffer(obj::CVICostGradientObjective) = obj.buffer
 
 function (obj::CVICostGradientObjective)(M::AbstractManifold, X, p)
     ef = convert(ExponentialFamilyDistribution, M, p)
@@ -18,10 +20,11 @@ function (obj::CVICostGradientObjective)(M::AbstractManifold, X, p)
     η = ExponentialFamily.getnaturalparameters(ef)
     inv_fisher = cholinv(ExponentialFamily.fisherinformation(ef))
 
-    c = compute_cost(strategy, state, η, logpartition, gradlogpartition, inv_fisher)
-    X = compute_gradient!(strategy, state, X, η, logpartition, gradlogpartition, inv_fisher)
+    c = compute_cost(obj, strategy, state, η, logpartition, gradlogpartition, inv_fisher)
+    X = compute_gradient!(obj, strategy, state, X, η, logpartition, gradlogpartition, inv_fisher)
     X = project!(M, X, p, X)
 
     return c, X
 end
+
 
