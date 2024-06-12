@@ -107,19 +107,22 @@ function project_to(prj::ProjectedTo, f::F) where {F}
 
     buffer = MallocSlabBuffer()
     try
-        state = CVIObjectiveState(
-            nsamples = nsamples,
+        state = ControlVariateStrategyState(
             samples = samples,
             logpdfs = logpdfs,
             sufficientstatistics = sufficientstatistics,
             gradsamples = gradsamples,
+        )
+        strategy = ControlVariateStrategy(
+            nsamples = nsamples,
             seed = seed,
-            srng = srng,
+            rng = srng,
+            state = state,
             buffer = buffer,
         )
 
         inplacef = convert(InplaceLogpdf, f)
-        g_grad_g! = CVICostGradientObjective(inplacef, state)
+        g_grad_g! = CVICostGradientObjective(inplacef, strategy)
         objective =
             ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 
