@@ -212,7 +212,7 @@ function control_variate_compute_gradient_buffered!(
         # First we compute the `cov` between `state.sufficientstatistics'` and `state.gradsamples'`
         # The naive code would be simply `cov_matrix = cov(state.sufficientstatistics', state.gradsamples')`
         # but it allocates A LOT, especially when we have a lot of samples, so instead we preallocate the space 
-        # using the `@alloc` macro and call inplace `cov!`
+        # using the `@alloc` macro and call inplace `control_variate_cov_buffered!`
         # --
         cov_matrix = @alloc(
             promote_type(eltype(state.sufficientstatistics), eltype(state.gradsamples)),
