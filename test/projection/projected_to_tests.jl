@@ -144,13 +144,48 @@ end
     end
 end
 
+@testitem "Projection should support supplementary natural parameters" begin
+    using ExponentialFamily, StableRNGs, BayesBase, Distributions
+
+    rng = StableRNG(42)
+    prj = ProjectedTo(
+        Beta,
+        parameters = ProjectionParameters(tolerance = 1e-4, niterations = 200),
+    )
+
+    for n = 2:15
+        distributions = [Beta(1 + 10rand(rng), 1 + 10rand(rng)) for i = 1:n]
+        analytical =
+            reduce((l, r) -> prod(PreserveTypeProd(Distribution), l, r), distributions)
+
+        targetfn = (x) -> logpdf(distributions[1], x)
+        approximated_with_supplementary = project_to(prj, targetfn, distributions[2:end]...)
+        approximated_without_supplementary = project_to(prj, targetfn)
+
+        @test kldivergence(approximated_with_supplementary, analytical) < 1e-3
+        @test kldivergence(approximated_without_supplementary, analytical) > 0.4
+    end
+end
+
 @testitem "Projection a product with supplementary natural parameters should better than just `ProductOf`" begin
     using ExponentialFamily, BayesBase, Distributions, JET
     distributions = [
+        (Bernoulli(0.5), Bernoulli(0.5)),
+        (Bernoulli(0.1), Bernoulli(0.9)),
+        (Bernoulli(0.9), Bernoulli(0.1)),
         (Beta(10, 10), Beta(3, 3)),
+        (Beta(1, 1), Beta(0.1, 3)),
         (Normal(0, 1), Normal(0, 1)),
         (NormalMeanVariance(-2, 2), NormalMeanVariance(2, 5)),
+        (NormalMeanVariance(3, 20), NormalMeanVariance(0.1, 0.1)),
         (Gamma(1, 1), Gamma(10, 10)),
+        # its actually worse for `MvNormalMeanCovariance`
+        # (MvNormalMeanCovariance([ 3.14, 2.16 ], [ 1.0 0.0; 0.0 1.0 ]), MvNormalMeanCovariance([ -4.2, 4.2 ], [ 3.14 -0.1; -0.1 4.13 ])),
+        (Dirichlet([1, 1]), Dirichlet([2, 2])),
+        # its actually worse for `Categorical`
+        # (Categorical([0.5, 0.5]), Categorical([0.4, 0.6])),
+        # its actually worse for `LogNormal`
+        # (LogNormal(-1, 10), LogNormal(3, 4)),
     ]
 
     for distribution in distributions
@@ -162,7 +197,7 @@ end
             ExponentialFamily.exponential_family_typetag(left),
             dims...;
             conditioner = nothing,
-            parameters = ProjectionParameters(nsamples = 5000, niterations = 104),
+            parameters = ProjectionParameters(tolerance = 1e-12, niterations = 1000),
         )
 
         targetfn_1 = (x) -> logpdf(left, x)
@@ -171,13 +206,11 @@ end
         approximated_2 = project_to(prj, targetfn_2)
         analytical = prod(PreserveTypeProd(Distribution), left, right)
 
-        @show kldivergence(approximated_2, analytical) -
-              kldivergence(approximated_1, analytical)
+        @test abs(kldivergence(approximated_1, analytical)) < 1e-2
+        @test abs(kldivergence(approximated_2, analytical)) < 1e-2
 
-        @test kldivergence(approximated_1, analytical) <
-              kldivergence(approximated_2, analytical)
-
-        error("test is not finished")
+        @test abs(kldivergence(approximated_1, analytical)) <
+              abs(kldivergence(approximated_2, analytical))
     end
 
     @test_throws "Supplementary distributions must be of the same exponential member as the projection target `Distributions.Beta`, got `Distributions.Bernoulli`" project_to(

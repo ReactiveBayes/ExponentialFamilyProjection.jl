@@ -127,7 +127,7 @@ function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
                 lazy"Supplementary distributions must have the same conditioner as the projection target `$(get_projected_to_type(prj))` with `conditioner = $(get_projected_to_conditioner(prj))`, got `$(ExponentialFamily.exponential_family_typetag(s))` with `conditioner = $(getconditioner(supplementary_ef))`",
             )
         end
-        return getnaturalparameters(supplementary_ef)
+        return copy(getnaturalparameters(supplementary_ef))
     end
 
     nsamples = getnsamples(parameters)
