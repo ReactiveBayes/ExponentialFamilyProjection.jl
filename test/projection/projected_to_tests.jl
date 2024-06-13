@@ -60,24 +60,47 @@
 end
 
 @testitem "ProjectionParameters structure" begin
-    import ExponentialFamilyProjection: getniterations, getnsamples, gettolerance, getseed
+    import ExponentialFamilyProjection:
+        ControlVariateStrategy, getniterations, getstrategy, gettolerance
 
     niterations = rand(Int)
-    nsamples = rand(Int)
+    strategy = ControlVariateStrategy()
     tolerance = rand(Float64)
-    seed = rand(UInt)
 
     parameters = ProjectionParameters(
         niterations = niterations,
-        nsamples = nsamples,
+        strategy = strategy,
         tolerance = tolerance,
-        seed = seed,
     )
 
     @test getniterations(parameters) === niterations
-    @test getnsamples(parameters) === nsamples
+    @test getstrategy(parameters) === strategy
     @test gettolerance(parameters) === tolerance
-    @test getseed(parameters) === seed
+end
+
+@testitem "ProjectionParameters get_stopping_criterion" begin
+    using Manopt
+    import ExponentialFamilyProjection: ProjectionParameters, get_stopping_criterion
+
+    @testset "ProjectionParameters with iterations but no tolerance" begin
+        parameters = ProjectionParameters(niterations = 100, tolerance = missing)
+        stopping_criterion = get_stopping_criterion(parameters)
+        @test stopping_criterion isa StopAfterIteration
+    end
+
+    @testset "ProjectionParameters with tolerance but no iterations" begin
+        parameters = ProjectionParameters(niterations = missing, tolerance = 1e-2)
+        stopping_criterion = get_stopping_criterion(parameters)
+        @test stopping_criterion isa StopWhenGradientNormLess
+    end
+
+    @testset "ProjectionParameters with both iterations and tolerance" begin
+        parameters = ProjectionParameters(niterations = 100, tolerance = 1e-2)
+        stopping_criterion = get_stopping_criterion(parameters)
+        @test stopping_criterion isa StopWhenAny{
+            <:Tuple{<:Manopt.StopAfterIteration,<:Manopt.StopWhenGradientNormLess},
+        }
+    end
 end
 
 @testitem "ProjectionParameters usebuffer" begin
@@ -150,7 +173,11 @@ end
     rng = StableRNG(42)
     prj = ProjectedTo(
         Beta,
-        parameters = ProjectionParameters(tolerance = 1e-4, niterations = 200),
+        parameters = ProjectionParameters(
+            tolerance = 1e-4,
+            niterations = 300,
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(rng = rng),
+        ),
     )
 
     for n = 2:15

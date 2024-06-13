@@ -2,8 +2,17 @@ using StableRNGs, LoopVectorization, Bumper
 
 import BayesBase: InplaceLogpdf
 
+"""
+    ControlVariateStrategy(; kwargs...)
+
+A strategy for gradient descent optimization and gradients computations.
+The following parameters are available:
+* `nsamples = 2000`: The number of samples to use for estimates
+* `seed = 42`: The seed for the random number generator
+* `rng = StableRNG(seed)`: The random number generator
+"""
 Base.@kwdef struct ControlVariateStrategy{S,D,N,T}
-    nsamples::S = 100
+    nsamples::S = 2000
     seed::D = 42
     rng::N = StableRNG(seed)
     state::T = nothing
@@ -13,6 +22,19 @@ getnsamples(strategy::ControlVariateStrategy) = strategy.nsamples
 getseed(strategy::ControlVariateStrategy) = strategy.seed
 getrng(strategy::ControlVariateStrategy) = strategy.rng
 getstate(strategy::ControlVariateStrategy) = strategy.state
+
+function getinitialpoint(strategy::ControlVariateStrategy, M::AbstractManifold)
+    return rand(getrng(strategy), M)
+end
+
+function with_state(strategy::ControlVariateStrategy, state)
+    return ControlVariateStrategy(
+        nsamples = getnsamples(strategy),
+        seed = getseed(strategy),
+        rng = getrng(strategy),
+        state = state,
+    )
+end
 
 function prepare_state!(
     strategy::ControlVariateStrategy,

@@ -1,4 +1,4 @@
-using ExponentialFamilyProjection
+using Documenter, ExponentialFamilyProjection
 
 DocMeta.setdocmeta!(
     ExponentialFamilyProjection,
@@ -13,14 +13,15 @@ makedocs(;
     warnonly = false,
     sitename = "ExponentialFamilyProjection.jl",
     format = Documenter.HTML(;
-        canonical = "https://lazydynamics.github.io/ExponentialFamilyProjection.jl",
+        canonical = "https://reactivebayes.github.io/ExponentialFamilyProjection.jl",
         edit_link = "main",
         assets = String[],
     ),
     pages = ["Home" => "index.md"],
+    repo = "github.com/ReactiveBayes/ExponentialFamilyProjection.jl",
 )
 
 deploydocs(;
-    repo = "github.com/lazydynamics/ExponentialFamilyProjection.jl",
+    repo = "github.com/ReactiveBayes/ExponentialFamilyProjection.jl",
     devbranch = "main",
 )

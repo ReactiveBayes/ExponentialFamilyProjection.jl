@@ -85,10 +85,12 @@ function test_convergence_nsamples(
 )
     divergence = map(nsamples_range) do nsamples
         parameters = ProjectionParameters(
-            nsamples = nsamples,
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(
+                nsamples = nsamples,
+                seed = rand(nsamples_rng, UInt),
+            ),
             niterations = nsamples_niterations,
             tolerance = nsamples_tolerance,
-            seed = rand(nsamples_rng, UInt),
             stepsize = nsamples_stepsize,
         )
         projection =
@@ -139,10 +141,12 @@ function test_convergence_niterations(
 )
     divergence = map(niterations_range) do niterations
         parameters = ProjectionParameters(
-            nsamples = niterations_nsamples,
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(
+                nsamples = niterations_nsamples,
+                seed = rand(niterations_rng, UInt),
+            ),
             niterations = niterations,
             tolerance = niterations_tolerance,
-            seed = rand(niterations_rng, UInt),
             stepsize = niterations_stepsize,
         )
         projection =
