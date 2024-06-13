@@ -1,22 +1,42 @@
 using ExponentialFamily, Distributions, BayesBase, StableRNGs, RollingFunctions, Manopt
 
-function test_projection_convergence(distribution; to = missing, dims = missing, kwargs...)
+function test_projection_convergence(
+    distribution;
+    to = missing,
+    dims = missing,
+    conditioner = missing,
+    kwargs...,
+)
     targetfn = let distribution = distribution
         (x) -> logpdf(distribution, x)
     end
 
-    ef = convert(ExponentialFamilyDistribution, distribution)
-    T = ismissing(to) ? ExponentialFamily.exponential_family_typetag(ef) : to
+    T =
+        ismissing(to) ?
+        ExponentialFamily.exponential_family_typetag(
+            convert(ExponentialFamilyDistribution, distribution),
+        ) : to
     dims = ismissing(dims) ? size(rand(StableRNG(42), distribution)) : dims
+    conditioner =
+        ismissing(conditioner) ?
+        getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
 
-    test1 = test_convergence_nsamples(distribution, targetfn, ef, T, dims; kwargs...)
+    test1 =
+        test_convergence_nsamples(distribution, targetfn, T, dims, conditioner; kwargs...)
 
     if !test1
         @warn "`nsamples` convergence test for $(distribution) failed."
         return false
     end
 
-    test2 = test_convergence_niterations(distribution, targetfn, ef, T, dims; kwargs...)
+    test2 = test_convergence_niterations(
+        distribution,
+        targetfn,
+        T,
+        dims,
+        conditioner;
+        kwargs...,
+    )
 
     if !test2
         @warn "`niterations` convergence test for $(distribution) failed."
@@ -53,9 +73,9 @@ _convergence_nsamples_default_niterations(::Type{Multivariate}, distribution) = 
 function test_convergence_nsamples(
     distribution,
     targetfn,
-    ef,
     T,
-    dims;
+    dims,
+    conditioner;
     nsamples_range = _convergence_nsamples_default_range(distribution),
     nsamples_tolerance = _convergence_nsamples_default_tolerance(distribution),
     nsamples_niterations = _convergence_nsamples_default_niterations(distribution),
@@ -71,14 +91,10 @@ function test_convergence_nsamples(
             seed = rand(nsamples_rng, UInt),
             stepsize = nsamples_stepsize,
         )
-        projection = ProjectedTo(
-            T,
-            dims...,
-            parameters = parameters,
-            conditioner = getconditioner(ef),
-        )
+        projection =
+            ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
         approximated = project_to(projection, targetfn)
-        return kldivergence(approximated, distribution)
+        return test_convergence_metric(approximated, distribution)
     end
 
     return test_convergence_to_stable_point(divergence)
@@ -111,9 +127,9 @@ _convergence_niterations_default_nsamples(::Type{Multivariate}, distribution) = 
 function test_convergence_niterations(
     distribution,
     targetfn,
-    ef,
     T,
-    dims;
+    dims,
+    conditioner;
     niterations_range = _convergence_niterations_default_range(distribution),
     niterations_tolerance = _convergence_niterations_default_tolerance(distribution),
     niterations_nsamples = _convergence_niterations_default_nsamples(distribution),
@@ -129,17 +145,32 @@ function test_convergence_niterations(
             seed = rand(niterations_rng, UInt),
             stepsize = niterations_stepsize,
         )
-        projection = ProjectedTo(
-            T,
-            dims...,
-            parameters = parameters,
-            conditioner = getconditioner(ef),
-        )
+        projection =
+            ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
         approximated = project_to(projection, targetfn)
-        return kldivergence(approximated, distribution)
+        return test_convergence_metric(approximated, distribution)
     end
 
     return test_convergence_to_stable_point(divergence)
+end
+
+# The metric we are using in the tests is `KL` divergence
+function test_convergence_metric(left, right)
+    return kldivergence(left, right)
+end
+
+# For the `ProductOf` we assume that we can call the `prod` function 
+# to compute the result. That means that we compare against analytical 
+# solutions for the `ProductOf` distributions.
+function test_convergence_metric(left, right::ProductOf)
+    return kldivergence(
+        left,
+        prod(
+            PreserveTypeProd(Distribution),
+            BayesBase.getleft(right),
+            BayesBase.getright(right),
+        ),
+    )
 end
 
 function test_convergence_to_stable_point(

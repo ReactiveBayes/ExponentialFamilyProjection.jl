@@ -25,6 +25,31 @@
     end
 end
 
+@testitem "Project a product of `Normal` and `Normal` to `Normal`" begin
+    using BayesBase, ExponentialFamily, Distributions
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = ProductOf(Normal(3.14, 7.13), Normal(-0.87, 15.4))
+        @test test_projection_convergence(
+            distribution,
+            to = NormalMeanVariance,
+            dims = (),
+            conditioner = nothing,
+        )
+    end
+
+    @testset let distribution = ProductOf(Normal(0.5, 1.0), Normal(0.95, 2.0))
+        @test test_projection_convergence(
+            distribution,
+            to = NormalMeanVariance,
+            dims = (),
+            conditioner = nothing,
+        )
+    end
+
+end
+
 @testitem "Simple projection to `MvNormal`" begin
     using BayesBase, ExponentialFamily, Distributions, JET, LinearAlgebra, Manopt
     using ExponentialFamilyProjection
@@ -50,4 +75,23 @@ end
             niterations_stepsize = ConstantStepsize(0.01),
         )
     end
+end
+
+@testitem "Project a product of `MvNormal` and `MvNormal` to `MvNormal`" begin
+    using BayesBase, ExponentialFamily, Distributions, LinearAlgebra
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = ProductOf(
+            MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2)))),
+            MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2)))),
+        )
+        @test test_projection_convergence(
+            distribution,
+            to = MvNormalMeanCovariance,
+            dims = (2, ),
+            conditioner = nothing,
+        )
+    end
+
 end
