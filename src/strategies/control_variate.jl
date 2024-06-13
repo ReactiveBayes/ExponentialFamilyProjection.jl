@@ -126,9 +126,7 @@ function compute_cost(
     gradlogpartition,
     inv_fisher,
 )
-    # η_1 = ExponentialFamily.getnaturalparameters(cvi.exponetialfamilydistribution)
     trick = logsumexp(state.logpdfs) - log(strategy.nsamples)
-    # return dot(ExponentialFamily.gradlogpartition(ef), nat_params - η_1) + trick - logpartition_part
     c = dot(gradlogpartition, η) + trick - logpartition
     return c
 end

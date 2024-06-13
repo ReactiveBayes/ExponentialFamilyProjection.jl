@@ -113,7 +113,7 @@ end
         Gamma(10, 10),
         Exponential(1),
         LogNormal(0, 1),
-        Dirichlet([ 1, 1 ]),
+        Dirichlet([1, 1]),
         NormalMeanVariance(0.0, 1.0),
         MvNormalMeanCovariance([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
     ]
@@ -142,6 +142,54 @@ end
         # Small differences are allowed due to different LinearAlgebra routines
         @test result_with_buffer ≈ result_without_buffer
     end
+end
+
+@testitem "Projection a product with supplementary natural parameters should better than just `ProductOf`" begin
+    using ExponentialFamily, BayesBase, Distributions, JET
+    distributions = [
+        (Beta(10, 10), Beta(3, 3)),
+        (Normal(0, 1), Normal(0, 1)),
+        (NormalMeanVariance(-2, 2), NormalMeanVariance(2, 5)),
+        (Gamma(1, 1), Gamma(10, 10)),
+    ]
+
+    for distribution in distributions
+        left = distribution[1]
+        right = distribution[2]
+        dims = size(rand(distribution))
+
+        prj = ProjectedTo(
+            ExponentialFamily.exponential_family_typetag(left),
+            dims...;
+            conditioner = nothing,
+            parameters = ProjectionParameters(nsamples = 5000, niterations = 104),
+        )
+
+        targetfn_1 = (x) -> logpdf(left, x)
+        targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
+        approximated_1 = project_to(prj, targetfn_1, right)
+        approximated_2 = project_to(prj, targetfn_2)
+        analytical = prod(PreserveTypeProd(Distribution), left, right)
+
+        @show kldivergence(approximated_2, analytical) -
+              kldivergence(approximated_1, analytical)
+
+        @test kldivergence(approximated_1, analytical) <
+              kldivergence(approximated_2, analytical)
+
+        error("test is not finished")
+    end
+
+    @test_throws "Supplementary distributions must be of the same exponential member as the projection target `Distributions.Beta`, got `Distributions.Bernoulli`" project_to(
+        ProjectedTo(Beta),
+        (x) -> 1,
+        Bernoulli(0.5),
+    )
+    @test_throws "Supplementary distributions must have the same conditioner as the projection target `Distributions.Laplace` with `conditioner = 2.0`, got `Distributions.Laplace` with `conditioner = 3.0`" project_to(
+        ProjectedTo(Laplace, conditioner = 2.0),
+        (x) -> 1,
+        Laplace(3.0, 0.5),
+    )
 end
 
 @testitem "test_convergence_to_stable_point" begin

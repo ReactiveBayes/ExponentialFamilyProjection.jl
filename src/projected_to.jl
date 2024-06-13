@@ -108,12 +108,27 @@ using Manopt, StaticTools
 
 export project_to
 
-function project_to(prj::ProjectedTo, f::F) where {F}
+function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
     parameters = get_projected_to_parameters(prj)
     M = get_projected_to_manifold(prj)
     seed = getseed(parameters)
     rng = StableRNG(seed)
     initialpoint = rand(rng, M)
+
+    supplementary_η = map(supplementary) do s
+        if ExponentialFamily.exponential_family_typetag(s) !== get_projected_to_type(prj)
+            error(
+                lazy"Supplementary distributions must be of the same exponential member as the projection target `$(get_projected_to_type(prj))`, got `$(ExponentialFamily.exponential_family_typetag(s))`",
+            )
+        end
+        supplementary_ef = convert(ExponentialFamilyDistribution, s)
+        if getconditioner(supplementary_ef) !== get_projected_to_conditioner(prj)
+            error(
+                lazy"Supplementary distributions must have the same conditioner as the projection target `$(get_projected_to_type(prj))` with `conditioner = $(get_projected_to_conditioner(prj))`, got `$(ExponentialFamily.exponential_family_typetag(s))` with `conditioner = $(getconditioner(supplementary_ef))`",
+            )
+        end
+        return getnaturalparameters(supplementary_ef)
+    end
 
     nsamples = getnsamples(parameters)
     samples = rand(rng, convert(ExponentialFamilyDistribution, M, initialpoint), nsamples)
@@ -135,7 +150,7 @@ function project_to(prj::ProjectedTo, f::F) where {F}
             state = state,
         )
 
-        g_grad_g! = CVICostGradientObjective(f, strategy, buffer)
+        g_grad_g! = CVICostGradientObjective(f, supplementary_η, strategy, buffer)
         objective =
             ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 
