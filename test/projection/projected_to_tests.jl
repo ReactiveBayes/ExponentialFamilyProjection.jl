@@ -60,24 +60,47 @@
 end
 
 @testitem "ProjectionParameters structure" begin
-    import ExponentialFamilyProjection: getniterations, getnsamples, gettolerance, getseed
+    import ExponentialFamilyProjection:
+        ControlVariateStrategy, getniterations, getstrategy, gettolerance
 
     niterations = rand(Int)
-    nsamples = rand(Int)
+    strategy = ControlVariateStrategy()
     tolerance = rand(Float64)
-    seed = rand(UInt)
 
     parameters = ProjectionParameters(
         niterations = niterations,
-        nsamples = nsamples,
+        strategy = strategy,
         tolerance = tolerance,
-        seed = seed,
     )
 
     @test getniterations(parameters) === niterations
-    @test getnsamples(parameters) === nsamples
+    @test getstrategy(parameters) === strategy
     @test gettolerance(parameters) === tolerance
-    @test getseed(parameters) === seed
+end
+
+@testitem "ProjectionParameters get_stopping_criterion" begin
+    using Manopt
+    import ExponentialFamilyProjection: ProjectionParameters, get_stopping_criterion
+
+    @testset "ProjectionParameters with iterations but no tolerance" begin
+        parameters = ProjectionParameters(niterations = 100, tolerance = missing)
+        stopping_criterion = get_stopping_criterion(parameters)
+        @test stopping_criterion isa StopAfterIteration
+    end
+
+    @testset "ProjectionParameters with tolerance but no iterations" begin
+        parameters = ProjectionParameters(niterations = missing, tolerance = 1e-2)
+        stopping_criterion = get_stopping_criterion(parameters)
+        @test stopping_criterion isa StopWhenGradientNormLess
+    end
+
+    @testset "ProjectionParameters with both iterations and tolerance" begin
+        parameters = ProjectionParameters(niterations = 100, tolerance = 1e-2)
+        stopping_criterion = get_stopping_criterion(parameters)
+        @test stopping_criterion isa StopWhenAny{
+            <:Tuple{<:Manopt.StopAfterIteration,<:Manopt.StopWhenGradientNormLess},
+        }
+    end
 end
 
 @testitem "ProjectionParameters usebuffer" begin
@@ -113,7 +136,7 @@ end
         Gamma(10, 10),
         Exponential(1),
         LogNormal(0, 1),
-        Dirichlet([ 1, 1 ]),
+        Dirichlet([1, 1]),
         NormalMeanVariance(0.0, 1.0),
         MvNormalMeanCovariance([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
     ]
@@ -142,6 +165,91 @@ end
         # Small differences are allowed due to different LinearAlgebra routines
         @test result_with_buffer ≈ result_without_buffer
     end
+end
+
+@testitem "Projection should support supplementary natural parameters" begin
+    using ExponentialFamily, StableRNGs, BayesBase, Distributions
+
+    rng = StableRNG(42)
+    prj = ProjectedTo(
+        Beta,
+        parameters = ProjectionParameters(
+            tolerance = 1e-4,
+            niterations = 300,
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(rng = rng),
+        ),
+    )
+
+    for n = 2:15
+        distributions = [Beta(1 + 10rand(rng), 1 + 10rand(rng)) for i = 1:n]
+        analytical =
+            reduce((l, r) -> prod(PreserveTypeProd(Distribution), l, r), distributions)
+
+        targetfn = (x) -> logpdf(distributions[1], x)
+        approximated_with_supplementary = project_to(prj, targetfn, distributions[2:end]...)
+        approximated_without_supplementary = project_to(prj, targetfn)
+
+        @test kldivergence(approximated_with_supplementary, analytical) < 1e-3
+        @test kldivergence(approximated_without_supplementary, analytical) > 0.4
+    end
+end
+
+@testitem "Projection a product with supplementary natural parameters should better than just `ProductOf`" begin
+    using ExponentialFamily, BayesBase, Distributions, JET
+    distributions = [
+        (Bernoulli(0.5), Bernoulli(0.5)),
+        (Bernoulli(0.1), Bernoulli(0.9)),
+        (Bernoulli(0.9), Bernoulli(0.1)),
+        (Beta(10, 10), Beta(3, 3)),
+        (Beta(1, 1), Beta(0.1, 3)),
+        (Normal(0, 1), Normal(0, 1)),
+        (NormalMeanVariance(-2, 2), NormalMeanVariance(2, 5)),
+        (NormalMeanVariance(3, 20), NormalMeanVariance(0.1, 0.1)),
+        (Gamma(1, 1), Gamma(10, 10)),
+        # its actually worse for `MvNormalMeanCovariance`
+        # (MvNormalMeanCovariance([ 3.14, 2.16 ], [ 1.0 0.0; 0.0 1.0 ]), MvNormalMeanCovariance([ -4.2, 4.2 ], [ 3.14 -0.1; -0.1 4.13 ])),
+        (Dirichlet([1, 1]), Dirichlet([2, 2])),
+        # its actually worse for `Categorical`
+        # (Categorical([0.5, 0.5]), Categorical([0.4, 0.6])),
+        # its actually worse for `LogNormal`
+        # (LogNormal(-1, 10), LogNormal(3, 4)),
+    ]
+
+    for distribution in distributions
+        left = distribution[1]
+        right = distribution[2]
+        dims = size(rand(distribution))
+
+        prj = ProjectedTo(
+            ExponentialFamily.exponential_family_typetag(left),
+            dims...;
+            conditioner = nothing,
+            parameters = ProjectionParameters(tolerance = 1e-12, niterations = 1000),
+        )
+
+        targetfn_1 = (x) -> logpdf(left, x)
+        targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
+        approximated_1 = project_to(prj, targetfn_1, right)
+        approximated_2 = project_to(prj, targetfn_2)
+        analytical = prod(PreserveTypeProd(Distribution), left, right)
+
+        @test abs(kldivergence(approximated_1, analytical)) < 1e-2
+        @test abs(kldivergence(approximated_2, analytical)) < 1e-2
+
+        @test abs(kldivergence(approximated_1, analytical)) <
+              abs(kldivergence(approximated_2, analytical))
+    end
+
+    @test_throws "Supplementary distributions must be of the same exponential member as the projection target `Distributions.Beta`, got `Distributions.Bernoulli`" project_to(
+        ProjectedTo(Beta),
+        (x) -> 1,
+        Bernoulli(0.5),
+    )
+    @test_throws "Supplementary distributions must have the same conditioner as the projection target `Distributions.Laplace` with `conditioner = 2.0`, got `Distributions.Laplace` with `conditioner = 3.0`" project_to(
+        ProjectedTo(Laplace, conditioner = 2.0),
+        (x) -> 1,
+        Laplace(3.0, 0.5),
+    )
 end
 
 @testitem "test_convergence_to_stable_point" begin

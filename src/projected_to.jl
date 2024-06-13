@@ -1,7 +1,38 @@
 using ExponentialFamily, Manopt
 
-export ProjectedTo, ProjectionParameters
+export ProjectedTo, ProjectionParameters, project_to
 
+"""
+    ProjectedTo(::Type{T}, dims...; conditioner = nothing, parameters = DefaultProjectionParameters)
+
+A specification of a projection to an exponential family distribution.
+
+The following arguments are required:
+
+* `Type{T}`: a type of an exponential family member to project to, e.g. `Beta`
+* `dims...`: dimensions of the distribution, e.g. `2` for `MvNormal`
+
+The following arguments are optional:
+
+* `conditioner = nothing`: a conditioner to use for the projection, not all exponential family members require a conditioner, but some do, e.g. `Laplace`
+* `parameters = DefaultProjectionParameters`: parameters for the projection procedure
+
+```jldoctest 
+julia> using ExponentialFamily
+
+julia> projected_to = ProjectedTo(Beta)
+ProjectedTo(Beta)
+
+julia> projected_to = ProjectedTo(Beta, parameters = ProjectionParameters(niterations = 10))
+ProjectedTo(Beta)
+
+julia> projected_to = ProjectedTo(MvNormalMeanCovariance, 2)
+ProjectedTo(MvNormalMeanCovariance, dims = 2)
+
+julia> projected_to = ProjectedTo(Laplace, conditioner = 2.0)
+ProjectedTo(Laplace, conditioner = 2.0)
+```
+"""
 struct ProjectedTo{T,D,C,P}
     dims::D
     conditioner::C
@@ -62,22 +93,37 @@ function Base.show(io::IO, prj::ProjectedTo)
     print(io, ")")
 end
 
-Base.@kwdef struct ProjectionParameters{I,S,T,P,E,B}
+"""
+    ProjectionParameters(; kwargs...)
+
+A type to hold the parameters for the projection procedure. 
+The following parameters are available:
+    
+* `strategy = ExponentialFamilyProjection.ControlVariateStrategy()`: The strategy to use to compute the gradients.
+* `niterations = 100`: The number of iterations for the optimization procedure.
+* `tolerance = 1e-6`: The tolerance for the norm of the gradient.
+* `stepsize = ConstantStepsize(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
+* `usebuffer = Val(true)`: Whether to use a buffer for the projection. Must be either `Val(true)` or `Val(false)`. Disabling buffer can be useful for debugging purposes.
+"""
+Base.@kwdef struct ProjectionParameters{S,I,T,P,B}
+    strategy::S = ControlVariateStrategy()
     niterations::I = 100
-    nsamples::S = 2000
     tolerance::T = 1e-6
     stepsize::P = ConstantStepsize(0.1)
-    seed::E = 42
     usebuffer::B = Val(true)
 end
 
+"""
+    DefaultProjectionParameters()
+
+Return the default parameters for the projection procedure.
+"""
 const DefaultProjectionParameters = ProjectionParameters()
 
+getstrategy(parameters::ProjectionParameters) = parameters.strategy
 getniterations(parameters::ProjectionParameters) = parameters.niterations
-getnsamples(parameters::ProjectionParameters) = parameters.nsamples
 gettolerance(parameters::ProjectionParameters) = parameters.tolerance
 getstepsize(parameters::ProjectionParameters) = parameters.stepsize
-getseed(parameters::ProjectionParameters) = parameters.seed
 
 with_buffer(f::F, parameters::ProjectionParameters) where {F} =
     with_buffer(f, parameters.usebuffer, parameters)
@@ -95,47 +141,91 @@ with_buffer(f::F, ::Val{true}, parameters::ProjectionParameters) where {F} =
     end
 
 function Manopt.get_stopping_criterion(parameters::ProjectionParameters)
-    stopping = StopAfterIteration(getniterations(parameters))
+    return Manopt.get_stopping_criterion(
+        parameters::ProjectionParameters,
+        getniterations(parameters),
+        gettolerance(parameters),
+    )
+end
 
-    if !ismissing(gettolerance(parameters)) && !isnothing(gettolerance(parameters))
-        stopping = stopping | StopWhenGradientNormLess(gettolerance(parameters))
-    end
+function Manopt.get_stopping_criterion(
+    parameters::ProjectionParameters,
+    niterations,
+    tolerance,
+)
+    return StopAfterIteration(niterations) | StopWhenGradientNormLess(tolerance)
+end
 
-    return stopping
+function Manopt.get_stopping_criterion(
+    parameters::ProjectionParameters,
+    niterations::Missing,
+    tolerance,
+)
+    return StopWhenGradientNormLess(tolerance)
+end
+
+function Manopt.get_stopping_criterion(
+    parameters::ProjectionParameters,
+    niterations,
+    tolerance::Missing,
+)
+    return StopAfterIteration(niterations)
 end
 
 using Manopt, StaticTools
 
-export project_to
+"""
+    project_to(prj::ProjectedTo, f::F, supplementary...)
 
-function project_to(prj::ProjectedTo, f::F) where {F}
-    parameters = get_projected_to_parameters(prj)
+Project the function `f` to the exponential family distribution specified by `prj`.
+Additionally `supplementary` distributions can be provided to project a product of `f` and `supplementary` distributions.
+Note that `supplementary` distributions must be of the same type and conditioner as the target distribution.
+
+```jldoctest
+julia> using ExponentialFamily, BayesBase
+
+julia> f = (x) -> logpdf(Beta(30.14, 2.71), x);
+
+julia> prj = ProjectedTo(Beta; parameters = ProjectionParameters(niterations = 500))
+ProjectedTo(Beta)
+
+julia> project_to(prj, f)
+Distributions.Beta{Float64}(α=28.02499252166451, β=2.550992902115787)
+```
+"""
+function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
     M = get_projected_to_manifold(prj)
-    seed = getseed(parameters)
-    rng = StableRNG(seed)
-    initialpoint = rand(rng, M)
+    parameters = get_projected_to_parameters(prj)
 
-    nsamples = getnsamples(parameters)
-    samples = rand(rng, convert(ExponentialFamilyDistribution, M, initialpoint), nsamples)
-    logpdfs = zeros(eltype(initialpoint), nsamples)
-    sufficientstatistics = zeros(eltype(initialpoint), length(initialpoint), nsamples)
-    gradsamples = similar(sufficientstatistics)
+    # "Supplementary" natural parameters are parameters that are simply being subtracted 
+    # from the natural parameters of the current estiamted distribution. This might be useful 
+    # to project a "product" of the function `f` and `supplementary` distributions
+    supplementary_η = map(supplementary) do s
+        if ExponentialFamily.exponential_family_typetag(s) !== get_projected_to_type(prj)
+            error(
+                lazy"Supplementary distributions must be of the same exponential member as the projection target `$(get_projected_to_type(prj))`, got `$(ExponentialFamily.exponential_family_typetag(s))`",
+            )
+        end
+        supplementary_ef = convert(ExponentialFamilyDistribution, s)
+        if getconditioner(supplementary_ef) !== get_projected_to_conditioner(prj)
+            error(
+                lazy"Supplementary distributions must have the same conditioner as the projection target `$(get_projected_to_type(prj))` with `conditioner = $(get_projected_to_conditioner(prj))`, got `$(ExponentialFamily.exponential_family_typetag(s))` with `conditioner = $(getconditioner(supplementary_ef))`",
+            )
+        end
+        return copy(getnaturalparameters(supplementary_ef))
+    end
+
+    initialpoint = getinitialpoint(getstrategy(parameters), M)
+    state = prepare_state!(
+        getstrategy(parameters),
+        f,
+        convert(ExponentialFamilyDistribution, M, initialpoint),
+    )
+    strategy = with_state(getstrategy(parameters), state)
 
     return with_buffer(parameters) do buffer
-        state = ControlVariateStrategyState(
-            samples = samples,
-            logpdfs = logpdfs,
-            sufficientstatistics = sufficientstatistics,
-            gradsamples = gradsamples,
-        )
-        strategy = ControlVariateStrategy(
-            nsamples = nsamples,
-            seed = seed,
-            rng = rng,
-            state = state,
-        )
 
-        g_grad_g! = CVICostGradientObjective(f, strategy, buffer)
+        g_grad_g! = CVICostGradientObjective(f, supplementary_η, strategy, buffer)
         objective =
             ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 

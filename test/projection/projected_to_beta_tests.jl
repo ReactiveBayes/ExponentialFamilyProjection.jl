@@ -27,3 +27,34 @@ end
         @test test_projection_convergence(distribution, to = Beta)
     end
 end
+
+@testitem "Project a product of `Beta` and `Beta` to `Beta`" begin
+    using BayesBase, ExponentialFamily, Distributions
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = ProductOf(Beta(1, 1), Beta(3, 3))
+        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+    end
+
+    @testset let distribution = ProductOf(Beta(5, 1), Beta(6, 2))
+        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+    end
+
+end
+
+@testitem "Project a product of `Normal` and `Normal` to `Beta`" begin
+    using BayesBase, ExponentialFamily, Distributions
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = ProductOf(Normal(1, 1), Normal(3, 3))
+        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+    end
+
+    @testset let distribution = ProductOf(Normal(0, 1), Normal(0, 0.2))
+        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+    end
+
+end
+
