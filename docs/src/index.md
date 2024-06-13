@@ -4,8 +4,6 @@ CurrentModule = ExponentialFamilyProjection
 
 # ExponentialFamilyProjection
 
-Documentation for [ExponentialFamilyProjection](https://github.com/ReactiveBayes/ExponentialFamilyProjection.jl).
-
 The `ExponentialFamilyProjection.jl` package offers a suite of functions for projecting an arbitrary (un-normalized) log probability density function onto a specified member of the exponential family (e.g., Gaussian, Beta, Bernoulli). This is achieved by optimizing the natural parameters of the exponential family member within a defined manifold. The library leverages `Manopt.jl` for optimization and utilizes [`ExponentialFamilyManifolds.jl`](https://github.com/ReactiveBayes/ExponentialFamilyManifolds.jl) to define the manifolds corresponding to the members of the exponential family.
 
 ## Projection parameters
