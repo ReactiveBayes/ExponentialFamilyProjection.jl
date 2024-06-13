@@ -7,12 +7,18 @@ using ExponentialFamily,
     ManifoldsBase,
     Manifolds,
     Static,
+    StatsFuns,
+    LinearAlgebra,
+    FastCholesky,
+    Bumper,
     StaticArrays,
     Random
 
 import BayesBase: InplaceLogpdf
 
 include("cvi.jl")
+include("strategies/control_variate.jl")
+
 include("projected_to.jl")
 
 end
