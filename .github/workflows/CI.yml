@@ -47,6 +47,7 @@ jobs:
   docs:
     name: Documentation
     runs-on: ubuntu-latest
+    needs: test
     permissions:
       actions: write # needed to allow julia-actions/cache to proactively delete old caches that it has created
       contents: write
