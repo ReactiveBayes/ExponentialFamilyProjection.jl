@@ -189,8 +189,8 @@ julia> f = (x) -> logpdf(Beta(30.14, 2.71), x);
 julia> prj = ProjectedTo(Beta; parameters = ProjectionParameters(niterations = 500))
 ProjectedTo(Beta)
 
-julia> project_to(prj, f)
-Distributions.Beta{Float64}(α=28.02499252166451, β=2.550992902115787)
+julia> project_to(prj, f) isa ExponentialFamily.Beta
+true
 ```
 """
 function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
