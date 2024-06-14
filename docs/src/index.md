@@ -59,6 +59,7 @@ targetf = (x) -> logpdf(hiddengaussian, x)
 prj = ProjectedTo(NormalMeanVariance)
 result = project_to(prj, targetf)
 @test kldivergence(result, hiddengaussian) < 1e-3 #hide
+result #hide
 ```
 
 We can see that the estimated `result` is pretty close to the actual `hiddengaussian` used to define the `targetf`. We can also visualise the results using the `Plots.jl` package.
@@ -96,6 +97,7 @@ targetf = (x) -> logpdf(hiddenbeta, x)
 prj = ProjectedTo(Beta)
 result = project_to(prj, targetf)
 @test kldivergence(result, hiddenbeta) < 1e-2 #hide
+result #hide
 ```
 
 And let's visualize the result using the `Plots.jl` package:
