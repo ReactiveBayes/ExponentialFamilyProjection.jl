@@ -128,8 +128,9 @@ getstepsize(parameters::ProjectionParameters) = parameters.stepsize
 with_buffer(f::F, parameters::ProjectionParameters) where {F} =
     with_buffer(f, parameters.usebuffer, parameters)
 
-with_buffer(f::F, ::Val{false}, parameters::ProjectionParameters) where {F} = f(nothing)
-with_buffer(f::F, ::Val{true}, parameters::ProjectionParameters) where {F} =
+with_buffer(f::F, buffer, ::ProjectionParameters) where {F} = f(buffer)
+with_buffer(f::F, ::Val{false}, ::ProjectionParameters) where {F} = f(nothing)
+with_buffer(f::F, ::Val{true}, ::ProjectionParameters) where {F} =
     let buffer = MallocSlabBuffer()
         try
             f(buffer)
@@ -193,7 +194,12 @@ julia> project_to(prj, f) isa ExponentialFamily.Beta
 true
 ```
 """
-function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
+function project_to(
+    prj::ProjectedTo,
+    f::F,
+    supplementary...;
+    initialpoint = nothing,
+) where {F}
     M = get_projected_to_manifold(prj)
     parameters = get_projected_to_parameters(prj)
 
@@ -215,7 +221,8 @@ function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
         return copy(getnaturalparameters(supplementary_ef))
     end
 
-    initialpoint = getinitialpoint(getstrategy(parameters), M)
+    initialpoint =
+        isnothing(initialpoint) ? getinitialpoint(getstrategy(parameters), M) : initialpoint
     state = prepare_state!(
         getstrategy(parameters),
         f,

@@ -21,15 +21,15 @@ function test_projection_convergence(
         ismissing(conditioner) ?
         getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
 
-    test1 =
+    test1, series1 =
         test_convergence_nsamples(distribution, targetfn, T, dims, conditioner; kwargs...)
 
     if !test1
-        @warn "`nsamples` convergence test for $(distribution) failed."
+        @warn "`nsamples` convergence test for $(distribution) failed. $(series1)"
         return false
     end
 
-    test2 = test_convergence_niterations(
+    test2, series2 = test_convergence_niterations(
         distribution,
         targetfn,
         T,
@@ -39,7 +39,7 @@ function test_projection_convergence(
     )
 
     if !test2
-        @warn "`niterations` convergence test for $(distribution) failed."
+        @warn "`niterations` convergence test for $(distribution) failed. $(series2)"
         return false
     end
 
@@ -81,6 +81,7 @@ function test_convergence_nsamples(
     nsamples_niterations = _convergence_nsamples_default_niterations(distribution),
     nsamples_rng = StableRNG(42),
     nsamples_stepsize = ConstantStepsize(0.1),
+    nsamples_required_accuracy = 1e-1,
     kwargs...,
 )
     divergence = map(nsamples_range) do nsamples
@@ -98,6 +99,8 @@ function test_convergence_nsamples(
         approximated = project_to(projection, targetfn)
         return test_convergence_metric(approximated, distribution)
     end
+
+    @test any(<(nsamples_required_accuracy), divergence)
 
     return test_convergence_to_stable_point(divergence)
 end
@@ -137,6 +140,7 @@ function test_convergence_niterations(
     niterations_nsamples = _convergence_niterations_default_nsamples(distribution),
     niterations_rng = StableRNG(42),
     niterations_stepsize = ConstantStepsize(0.1),
+    niterations_required_accuracy = 1e-1,
     kwargs...,
 )
     divergence = map(niterations_range) do niterations
@@ -154,6 +158,8 @@ function test_convergence_niterations(
         approximated = project_to(projection, targetfn)
         return test_convergence_metric(approximated, distribution)
     end
+
+    @test any(<(niterations_required_accuracy), divergence)
 
     return test_convergence_to_stable_point(divergence)
 end
@@ -184,7 +190,7 @@ function test_convergence_to_stable_point(
     valthreshold = 1e-4,
 )
     if all(<(valthreshold), abs.(series))
-        return true
+        return true, series
     end
 
     # We check for each `window_size` that the moving std converges to zero
@@ -205,10 +211,10 @@ function test_convergence_to_stable_point(
         # For the test to pass we require that at least `20%` of
         # consecutive points at the end are less than `stdthreshold`
         if count < (length(movingstd) ÷ 5)
-            return false
+            return false, series
         end
 
     end
 
-    return true
+    return true, series
 end

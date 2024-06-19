@@ -124,3 +124,32 @@ end
     end
 
 end
+
+@testitem "Gradient shouldn't depend on the scale of the `logpdf` when nsamples goes to infinity" begin
+    import ExponentialFamilyProjection: CVICostGradientObjective, ControlVariateStrategy
+    import ExponentialFamilyManifolds: get_natural_manifold
+    using StableRNGs, ExponentialFamily, Manifolds, BayesBase
+
+    dist = Beta(4, 6)
+    targetfn1 = (x) -> logpdf(dist, x)
+    targetfn2 = (x) -> logpdf(dist, x) - 1000
+
+    strategy = ControlVariateStrategy(
+        nsamples = 10^6
+    )
+    M = get_natural_manifold(Beta, ())
+
+    rng = StableRNG(42)
+    p = rand(rng, M)
+    X1 = zero_vector(M, p)
+    X2 = zero_vector(M, p)
+
+    objective1 = CVICostGradientObjective(targetfn1, (), strategy, nothing)
+    objective2 = CVICostGradientObjective(targetfn2, (), strategy, nothing)
+
+    c1, X1 = objective1(M, X1, p)
+    c2, X2 = objective2(M, X2, p)
+
+    @test c1 - 1000 ≈ c2
+    @test X1 ≈ X2 rtol = 1e-4
+end
