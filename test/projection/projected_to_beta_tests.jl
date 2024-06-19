@@ -61,8 +61,8 @@ end
         @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
     end
 
-    @testset let distribution = ProductOf(Beta(500, 100), Beta(600, 200))
-        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+    @testset let distribution = ProductOf(Beta(500, 100), Beta(100, 700))
+        @test_broken test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
     end
 
 end

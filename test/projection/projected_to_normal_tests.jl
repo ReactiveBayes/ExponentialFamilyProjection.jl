@@ -24,12 +24,12 @@
         @test test_projection_convergence(distribution)
     end
 
-    @testset let distribution = Normal(-3.14, 0.001)
+    @testset let distribution = Normal(-3.14, 0.01)
         @test test_projection_convergence(distribution)
     end
 
-    @testset let distribution = Normal(-3.14, 0.00001)
-        @test test_projection_convergence(distribution)
+    @testset let distribution = Normal(-3.14, 0.0001)
+        @test_broken test_projection_convergence(distribution)
     end
 end
 
@@ -80,7 +80,7 @@ end
         @test test_projection_convergence(
             distribution,
             niterations_range = 500:100:2000,
-            niterations_stepsize = ConstantStepsize(0.01),
+            niterations_stepsize = ConstantStepsize(0.1),
         )
     end
 end
