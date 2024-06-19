@@ -23,6 +23,14 @@
     @testset let distribution = Normal(-3.14, 2.71)
         @test test_projection_convergence(distribution)
     end
+
+    @testset let distribution = Normal(-3.14, 0.001)
+        @test test_projection_convergence(distribution)
+    end
+
+    @testset let distribution = Normal(-3.14, 0.00001)
+        @test test_projection_convergence(distribution)
+    end
 end
 
 @testitem "Project a product of `Normal` and `Normal` to `Normal`" begin
