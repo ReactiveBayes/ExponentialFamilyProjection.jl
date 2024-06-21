@@ -39,7 +39,7 @@
 end
 
 @testitem "ControlVariateStrategy prepare state" begin
-    using JET, ExponentialFamily, Distributions, BayesBase, LinearAlgebra
+    using JET, ExponentialFamily, Distributions, BayesBase, LinearAlgebra, StableRNGs
     import ExponentialFamilyProjection:
         ControlVariateStrategy,
         ControlVariateStrategyState,
@@ -47,7 +47,12 @@ end
         getsamples,
         getlogpdfs,
         getsufficientstatistics,
-        getgradsamples
+        getgradsamples,
+        getnsamples,
+        getseed,
+        getrng,
+        getstate,
+        getcenterlogpdfs
 
     dists = [
         NormalMeanVariance(0, 1),
@@ -70,6 +75,12 @@ end
 
             @testset "Empty state should create new state every time" begin
                 strategy = ControlVariateStrategy(nsamples = nsamples, state = nothing)
+            
+                @test getnsamples(strategy) === nsamples
+                @test getseed(strategy) === 42
+                @test getrng(strategy) == StableRNG(42)
+                @test getstate(strategy) === nothing
+                @test getcenterlogpdfs(strategy) === Val(true)
 
                 @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) prepare_state!(
                     strategy,
