@@ -17,6 +17,7 @@ using ExponentialFamily,
 import BayesBase: InplaceLogpdf
 
 include("cvi.jl")
+include("debug.jl")
 include("strategies/control_variate.jl")
 
 include("projected_to.jl")
