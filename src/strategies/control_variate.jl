@@ -11,17 +11,19 @@ The following parameters are available:
 * `seed = 42`: The seed for the random number generator
 * `rng = StableRNG(seed)`: The random number generator
 """
-Base.@kwdef struct ControlVariateStrategy{S,D,N,T}
+Base.@kwdef struct ControlVariateStrategy{S,D,N,T,B}
     nsamples::S = 2000
     seed::D = 42
     rng::N = StableRNG(seed)
     state::T = nothing
+    centerlogpdfs::B = Val(true)
 end
 
 getnsamples(strategy::ControlVariateStrategy) = strategy.nsamples
 getseed(strategy::ControlVariateStrategy) = strategy.seed
 getrng(strategy::ControlVariateStrategy) = strategy.rng
 getstate(strategy::ControlVariateStrategy) = strategy.state
+getcenterlogpdfs(strategy::ControlVariateStrategy) = strategy.centerlogpdfs
 
 function getinitialpoint(strategy::ControlVariateStrategy, M::AbstractManifold)
     return rand(getrng(strategy), M)
@@ -33,6 +35,7 @@ function with_state(strategy::ControlVariateStrategy, state)
         seed = getseed(strategy),
         rng = getrng(strategy),
         state = state,
+        centerlogpdfs = getcenterlogpdfs(strategy),
     )
 end
 
@@ -60,12 +63,13 @@ getsamples(state::ControlVariateStrategyState) = state.samples
 getlogpdfs(state::ControlVariateStrategyState) = state.logpdfs
 getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
 getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
+getcenterlogpdfs(state::ControlVariateStrategyState) = state.centerlogpdfs
 
 function prepare_state!(
     ::Nothing,
     strategy::ControlVariateStrategy,
     targetfn::InplaceLogpdf,
-    distribution,
+    distribution
 )
 
     # If the `state` saved in `ControlVariateStrategy` is `nothing`
@@ -85,10 +89,23 @@ function prepare_state!(
         samples = samples,
         logpdfs = logpdfs,
         sufficientstatistics = sufficientstatistics,
-        gradsamples = gradsamples,
+        gradsamples = gradsamples
     )
 
     return prepare_state!(state, strategy, targetfn, distribution)
+end
+
+function center_vals!(::Val{true}, vals)
+    # @show "True call"
+    mean_val = mean(vals)
+    foreach(enumerate(vals)) do (i, val)
+        @inbounds vals[i] = val - mean_val
+    end
+    return vals
+end
+
+function center_vals!(::Val{false}, vals)
+    return vals
 end
 
 function prepare_state!(
@@ -116,6 +133,8 @@ function prepare_state!(
     J = size(state.gradsamples, 1)
 
     targetfn(state.logpdfs, sample_container)
+
+    center_vals!(strategy.centerlogpdfs, state.logpdfs)
 
     foreach(enumerate(sample_container)) do (i, sample)
         @inbounds logpdf = state.logpdfs[i]
