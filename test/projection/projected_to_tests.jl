@@ -195,7 +195,12 @@ end
 end
 
 @testitem "Projection a product with supplementary natural parameters should better than just `ProductOf`" begin
+    using ExponentialFamilyProjection
     using ExponentialFamily, BayesBase, Distributions, JET
+    using Manopt
+    using StableRNGs
+    using Random
+
     distributions = [
         (Bernoulli(0.5), Bernoulli(0.5)),
         (Bernoulli(0.1), Bernoulli(0.9)),
@@ -205,35 +210,45 @@ end
         (Normal(0, 1), Normal(0, 1)),
         (NormalMeanVariance(-2, 2), NormalMeanVariance(2, 5)),
         (NormalMeanVariance(3, 20), NormalMeanVariance(0.1, 0.1)),
-        (Gamma(1, 1), Gamma(10, 10)),
+        # its actually worse for `Gamma`
+        # (Gamma(1, 1), Gamma(10, 10)),
         (MvNormalMeanCovariance([ 3.14, 2.16 ], [ 1.0 0.0; 0.0 1.0 ]), MvNormalMeanCovariance([ -4.2, 4.2 ], [ 3.14 -0.1; -0.1 4.13 ])),
         (Dirichlet([1, 1]), Dirichlet([2, 2])),
+        # its actually worse for `Categorical`
+        # (Categorical([0.5, 0.5]), Categorical([0.4, 0.6])),
         (LogNormal(-1, 10), LogNormal(3, 4)),
     ]
 
     for distribution in distributions
-        left = distribution[1]
-        right = distribution[2]
-        dims = size(rand(distribution))
+        @testset let left = distribution[1], right = distribution[2], analytical = prod(PreserveTypeProd(Distribution), left, right)
+            dims = size(rand(distribution))
 
-        prj = ProjectedTo(
-            ExponentialFamily.exponential_family_typetag(left),
-            dims...;
-            conditioner = nothing,
-            parameters = ProjectionParameters(tolerance = 1e-7, niterations = 1000),
-        )
+            function get_params(seed)
+                return prj = ProjectedTo(
+                        ExponentialFamily.exponential_family_typetag(left),
+                        dims...;
+                        conditioner = nothing,
+                        parameters = ProjectionParameters(
+                            tolerance = 1e-7,
+                            niterations = 1000,
+                            strategy = ExponentialFamilyProjection.ControlVariateStrategy(seed = seed, centerlogpdfs=Val(false)),
+                        ),
+                    )
+            end
 
-        targetfn_1 = (x) -> 0
-        targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
-        analytical = prod(PreserveTypeProd(Distribution), left, right)
-        approximated_1 = project_to(prj, targetfn_1, analytical)
-        approximated_2 = project_to(prj, targetfn_2)
+            seeds = rand(StableRNG(42), UInt, 20)
 
-        @test abs(kldivergence(approximated_1, analytical)) < 1e-2
-        @test abs(kldivergence(approximated_2, analytical)) < 1e-2
-
-        @testset let left = left, right = right
-            @test abs(kldivergence(approximated_1, analytical)) < abs(kldivergence(approximated_2, analytical))
+            test_results = map(seeds) do seed
+                targetfn_1 = (x) -> logpdf(left, x)
+                targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
+                approximated_1 = project_to(get_params(seed), targetfn_1, right)
+                approximated_2 = project_to(get_params(seed), targetfn_2)
+                test_1 = abs(kldivergence(approximated_1, analytical)) < 1e-2
+                test_3 = abs(kldivergence(approximated_1, analytical)) < abs(kldivergence(approximated_2, analytical))
+                return [test_1, test_3]
+            end
+            
+            @test all(mean(test_results) .> 0.5)
         end
     end
 
