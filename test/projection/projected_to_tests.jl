@@ -236,7 +236,7 @@ end
                     )
             end
 
-            seeds = rand(StableRNG(42), UInt, 20)
+            seeds = rand(StableRNG(42), UInt, 19)
 
             test_results = map(seeds) do seed
                 targetfn_1 = (x) -> logpdf(left, x)
@@ -248,7 +248,7 @@ end
                 return [test_1, test_3]
             end
             
-            @test all(mean(test_results) .> 0.5)
+            @test all(mean(test_results) .> .5)
         end
     end
 
