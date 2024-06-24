@@ -193,7 +193,7 @@ julia> project_to(prj, f) isa ExponentialFamily.Beta
 true
 ```
 """
-function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
+function project_to(prj::ProjectedTo, f::F, supplementary...; debug = missing) where {F}
     M = get_projected_to_manifold(prj)
     parameters = get_projected_to_parameters(prj)
 
@@ -235,7 +235,7 @@ function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
             initialpoint;
             stopping_criterion = get_stopping_criterion(parameters),
             stepsize = getstepsize(parameters),
-            debug = missing,
+            debug = debug,
         )
 
         return convert(
@@ -244,4 +244,3 @@ function project_to(prj::ProjectedTo, f::F, supplementary...) where {F}
         )
     end
 end
-
