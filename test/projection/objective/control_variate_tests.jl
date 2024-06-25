@@ -32,7 +32,6 @@
             supplementary_ef = [getnaturalparameters(convert(ExponentialFamilyDistribution, right)),]
 
             seeds = rand(StableRNG(42), UInt, npoints)
-
             point = rand(StableRNG(42), manifold)
 
             costs = map(seeds) do seed
@@ -49,8 +48,6 @@
                     ExponentialFamilyProjection.ControlVariateStrategy(nsamples = nsamples, seed = seed),
                     nothing
                 )
-
-                rng = StableRNG(42)
                 
                 X2 = Manopt.zero_vector(manifold, point)
                 X1 = Manopt.zero_vector(manifold, point)
