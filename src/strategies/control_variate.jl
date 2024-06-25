@@ -148,8 +148,7 @@ function compute_cost(
     gradlogpartition,
     inv_fisher,
 )
-    trick = logsumexp(state.logpdfs) - log(strategy.nsamples)
-    c = dot(gradlogpartition, η) + trick - logpartition
+    c = dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition
     return c
 end
 
