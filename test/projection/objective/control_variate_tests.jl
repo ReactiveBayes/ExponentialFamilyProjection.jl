@@ -15,7 +15,7 @@
     ]
 
     for distribution in distributions
-        @testset let left = distribution[1], right = distribution[2], nsamples = 2000, npoints = 20
+        @testset let left = distribution[1], right = distribution[2], nsamples = 2000, nseeds = 20
             dims = size(rand(left))
             
             typetag = ExponentialFamily.exponential_family_typetag(left)
@@ -31,7 +31,7 @@
             ef = convert(ExponentialFamilyDistribution, right)
             supplementary_ef = [getnaturalparameters(convert(ExponentialFamilyDistribution, right)),]
 
-            seeds = rand(StableRNG(42), UInt, npoints)
+            seeds = rand(StableRNG(42), UInt, nseeds)
             point = rand(StableRNG(42), manifold)
 
             costs = map(seeds) do seed
