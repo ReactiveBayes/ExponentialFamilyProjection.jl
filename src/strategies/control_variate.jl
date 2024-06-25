@@ -148,8 +148,7 @@ function compute_cost(
     gradlogpartition,
     inv_fisher,
 )
-    c = dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition
-    return c
+    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition
 end
 
 function compute_gradient!(
