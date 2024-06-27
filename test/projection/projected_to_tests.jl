@@ -38,8 +38,8 @@
     @test get_projected_to_dims(ProjectedTo(Laplace, conditioner = 2.0)) === ()
     @test get_projected_to_conditioner(ProjectedTo(Laplace, conditioner = 2.0)) === 2.0
 
-    @test get_projected_to_parameters(ProjectedTo(Beta)) ===
-          ExponentialFamilyProjection.DefaultProjectionParameters
+    @test get_projected_to_parameters(ProjectedTo(Beta)) ==
+          ExponentialFamilyProjection.DefaultProjectionParameters()
     parameters = ProjectionParameters()
     @test get_projected_to_parameters(ProjectedTo(Beta, parameters = parameters)) ===
           parameters
@@ -252,6 +252,39 @@ end
     )
 end
 
+@testitem "Test initial point keyword argument" begin
+    using ExponentialFamily, ExponentialFamilyManifolds, BayesBase
+
+    dist = Beta(5, 5)
+    efdist = convert(ExponentialFamilyDistribution, dist)
+    targetfn = (x) -> logpdf(dist, x)
+
+    M = ExponentialFamilyManifolds.get_natural_manifold(Beta, ())
+    initialpoint = ExponentialFamilyManifolds.partition_point(
+        M,
+        getnaturalparameters(convert(ExponentialFamilyDistribution, dist)),
+    )
+
+    projection_with_vector =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = initialpoint)
+    projection_with_vector_repeated =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = initialpoint)
+    projection_with_dist = project_to(ProjectedTo(Beta), targetfn, initialpoint = dist)
+    projection_with_dist_repeated =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = dist)
+    projection_with_efdist = project_to(ProjectedTo(Beta), targetfn, initialpoint = efdist)
+    projection_with_efdist_repeated =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = efdist)
+
+    @test params(projection_with_vector) === params(projection_with_vector_repeated)
+    @test params(projection_with_dist) === params(projection_with_dist_repeated)
+    @test params(projection_with_vector) === params(projection_with_dist)
+    @test params(projection_with_vector) === params(projection_with_efdist)
+    @test params(projection_with_vector) === params(projection_with_efdist_repeated)
+    @test params(projection_with_dist) === params(projection_with_efdist)
+
+end
+
 @testitem "test_convergence_to_stable_point" begin
     using StableRNGs
 
@@ -259,7 +292,8 @@ end
 
     rng = StableRNG(42)
     for c in (0, 1, 5, 10), v in (1e-3, 1e-2), n in (20, 100)
-        series = map(x -> rand(Normal(1 / x^(0.5) + c, v)), 1:n)
-        @test test_convergence_to_stable_point(series)
+        series = map(x -> rand(rng, Normal(1 / x^(0.5) + c, v)), 1:n)
+        converged, _ = test_convergence_to_stable_point(series)
+        @test converged
     end
 end
