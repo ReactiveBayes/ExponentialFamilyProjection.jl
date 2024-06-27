@@ -8,6 +8,9 @@
         get_projected_to_parameters,
         get_projected_to_manifold
 
+    import ExponentialFamilyProjection:
+        getstrategy, getniterations, gettolerance, getstepsize, get_stopping_criterion
+
     @test repr(ProjectedTo()) ==
           "ProjectedTo(ExponentialFamily.ExponentialFamilyDistribution)"
     @test repr(ProjectedTo(3)) ==
@@ -38,8 +41,20 @@
     @test get_projected_to_dims(ProjectedTo(Laplace, conditioner = 2.0)) === ()
     @test get_projected_to_conditioner(ProjectedTo(Laplace, conditioner = 2.0)) === 2.0
 
-    @test get_projected_to_parameters(ProjectedTo(Beta)) ==
-          ExponentialFamilyProjection.DefaultProjectionParameters()
+    defaultparams = ExponentialFamilyProjection.DefaultProjectionParameters()
+    parameters_from_creation = get_projected_to_parameters(ProjectedTo(Beta))
+
+    @test getstrategy(defaultparams) == getstrategy(parameters_from_creation)
+    
+    @test getniterations(defaultparams) == getniterations(parameters_from_creation)
+    @test gettolerance(defaultparams) == gettolerance(parameters_from_creation)
+    # Testing `typeof` here since `Manopt` does not implement `==` 
+    @test typeof(getstepsize(defaultparams)) == typeof(getstepsize(parameters_from_creation))
+    @test typeof(get_stopping_criterion(defaultparams)) == typeof(get_stopping_criterion(parameters_from_creation))
+    # These should pass as soon as `Manopt` implements `==`
+    @test_broken getstepsize(defaultparams) == getstepsize(parameters_from_creation)
+    @test_broken get_stopping_criterion(defaultparams) == get_stopping_criterion(parameters_from_creation)
+
     parameters = ProjectionParameters()
     @test get_projected_to_parameters(ProjectedTo(Beta, parameters = parameters)) ===
           parameters

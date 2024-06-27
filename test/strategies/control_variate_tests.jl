@@ -1,7 +1,16 @@
 @testitem "ControlVariateStrategy generic properties" begin
-    using Random, Bumper, LinearAlgebra
+    using Random, Bumper, LinearAlgebra, Distributions, ExponentialFamily
     import ExponentialFamilyProjection:
-        ControlVariateStrategy, getnsamples, getseed, getrng, getbuffer
+        ControlVariateStrategy, getnsamples, getseed, getrng, getbuffer, getstate, prepare_state!
+
+    @test ControlVariateStrategy() == ControlVariateStrategy()
+    @test ControlVariateStrategy(nsamples = 100) == ControlVariateStrategy(nsamples = 100)
+    @test ControlVariateStrategy(seed = 42) == ControlVariateStrategy(seed = 42)
+    @test ControlVariateStrategy(rng = MersenneTwister(42)) == ControlVariateStrategy(rng = MersenneTwister(42))
+
+    @test ControlVariateStrategy(nsamples = 50) !== ControlVariateStrategy(nsamples = 100)
+    @test ControlVariateStrategy(seed = 41) !== ControlVariateStrategy(seed = 42)
+    @test ControlVariateStrategy(rng = MersenneTwister(41)) !== ControlVariateStrategy(rng = MersenneTwister(42))
 
     @testset "nsamples" begin
         strategy = ControlVariateStrategy(nsamples = 100)
@@ -35,6 +44,18 @@
 
         @test getrng(strategy) !== rng1
         @test getrng(strategy) === rng2
+    end
+
+    @testset "state" begin 
+        ef = convert(ExponentialFamilyDistribution, Beta(5, 5))
+        state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef)
+        state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef)
+        @test state1 == state2
+        @test ControlVariateStrategy(state = state1) == ControlVariateStrategy(state = state2)
+
+        state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef)
+        state2 = prepare_state!(ControlVariateStrategy(), (x) -> 2, ef)
+        @test state1 != state2
     end
 end
 
