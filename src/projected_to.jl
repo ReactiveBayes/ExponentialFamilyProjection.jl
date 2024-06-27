@@ -198,6 +198,7 @@ function project_to(
     prj::ProjectedTo,
     f::F,
     supplementary...;
+    debug = missing,
     initialpoint = nothing,
 ) where {F}
     M = get_projected_to_manifold(prj)
@@ -242,7 +243,7 @@ function project_to(
             initialpoint;
             stopping_criterion = get_stopping_criterion(parameters),
             stepsize = getstepsize(parameters),
-            debug = missing,
+            debug = debug,
         )
 
         return convert(
@@ -251,4 +252,3 @@ function project_to(
         )
     end
 end
-
