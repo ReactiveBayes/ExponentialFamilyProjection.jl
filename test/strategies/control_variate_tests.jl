@@ -171,7 +171,8 @@ end
     c1, X1 = objective1(M, X1, p)
     c2, X2 = objective2(M, X2, p)
 
-    @test c1 - 1000 ≈ c2
+    # `c2` is bigger, becase the `targetfn` is being subtracted from the optimized function
+    @test c1 ≈ c2 - 1000
     @test X1 ≈ X2 rtol = 1e-4
 end
 
