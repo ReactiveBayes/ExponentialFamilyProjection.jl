@@ -23,6 +23,13 @@ getseed(strategy::ControlVariateStrategy) = strategy.seed
 getrng(strategy::ControlVariateStrategy) = strategy.rng
 getstate(strategy::ControlVariateStrategy) = strategy.state
 
+function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
+    return getnsamples(a) == getnsamples(b) &&
+           getseed(a) == getseed(b) &&
+           getrng(a) == getrng(b) &&
+           getstate(a) == getstate(b)
+end
+
 function getinitialpoint(strategy::ControlVariateStrategy, M::AbstractManifold)
     return rand(getrng(strategy), M)
 end
@@ -54,6 +61,13 @@ Base.@kwdef struct ControlVariateStrategyState{M,L,F,G}
     logpdfs::L
     sufficientstatistics::F
     gradsamples::G
+end
+
+function Base.:(==)(a::ControlVariateStrategyState, b::ControlVariateStrategyState)::Bool
+    return a.samples == b.samples &&
+           a.logpdfs == b.logpdfs &&
+           a.sufficientstatistics == b.sufficientstatistics &&
+           a.gradsamples == b.gradsamples
 end
 
 getsamples(state::ControlVariateStrategyState) = state.samples
