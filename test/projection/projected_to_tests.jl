@@ -303,6 +303,11 @@ end
         targetfn_1 = (x) -> logpdf(left, x)
         approximated_1 = project_to(prj, targetfn_1, right, record = record)
         @test all(map((before, after) ->  before > after, record[1:end-1], record[2:end]))
+
+        record = [RecordCost()]
+        targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
+        approximated_2 = project_to(prj, targetfn_2)
+        @test all(map((before, after) ->  before > after, record[1:end-1], record[2:end]))
     end
 end 
 
