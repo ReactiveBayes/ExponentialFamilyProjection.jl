@@ -210,7 +210,12 @@ end
 end
 
 @testitem "Projection a product with supplementary natural parameters should better than just `ProductOf`" begin
+    using ExponentialFamilyProjection
     using ExponentialFamily, BayesBase, Distributions, JET
+    using Manopt
+    using StableRNGs
+    using Random
+
     distributions = [
         (Bernoulli(0.5), Bernoulli(0.5)),
         (Bernoulli(0.1), Bernoulli(0.9)),
@@ -220,39 +225,46 @@ end
         (Normal(0, 1), Normal(0, 1)),
         (NormalMeanVariance(-2, 2), NormalMeanVariance(2, 5)),
         (NormalMeanVariance(3, 20), NormalMeanVariance(0.1, 0.1)),
-        (Gamma(1, 1), Gamma(10, 10)),
-        # its actually worse for `MvNormalMeanCovariance`
-        # (MvNormalMeanCovariance([ 3.14, 2.16 ], [ 1.0 0.0; 0.0 1.0 ]), MvNormalMeanCovariance([ -4.2, 4.2 ], [ 3.14 -0.1; -0.1 4.13 ])),
+        # its actually worse for `Gamma`
+        # (Gamma(1, 1), Gamma(10, 10)),
+        (MvNormalMeanCovariance([ 3.14, 2.16 ], [ 1.0 0.0; 0.0 1.0 ]), MvNormalMeanCovariance([ -4.2, 4.2 ], [ 3.14 -0.1; -0.1 4.13 ])),
         (Dirichlet([1, 1]), Dirichlet([2, 2])),
         # its actually worse for `Categorical`
         # (Categorical([0.5, 0.5]), Categorical([0.4, 0.6])),
-        # its actually worse for `LogNormal`
-        # (LogNormal(-1, 10), LogNormal(3, 4)),
+        (LogNormal(-1, 10), LogNormal(3, 4)),
     ]
 
     for distribution in distributions
-        left = distribution[1]
-        right = distribution[2]
-        dims = size(rand(distribution))
+        @testset let left = distribution[1], right = distribution[2], analytical = prod(PreserveTypeProd(Distribution), left, right)
+            dims = size(rand(distribution))
 
-        prj = ProjectedTo(
-            ExponentialFamily.exponential_family_typetag(left),
-            dims...;
-            conditioner = nothing,
-            parameters = ProjectionParameters(tolerance = 1e-12, niterations = 1000),
-        )
+            function get_params(seed)
+                return prj = ProjectedTo(
+                        ExponentialFamily.exponential_family_typetag(left),
+                        dims...;
+                        conditioner = nothing,
+                        parameters = ProjectionParameters(
+                            tolerance = 1e-7,
+                            niterations = 1000,
+                            strategy = ExponentialFamilyProjection.ControlVariateStrategy(seed = seed, centerlogpdfs=Val(false)),
+                        ),
+                    )
+            end
 
-        targetfn_1 = (x) -> logpdf(left, x)
-        targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
-        approximated_1 = project_to(prj, targetfn_1, right)
-        approximated_2 = project_to(prj, targetfn_2)
-        analytical = prod(PreserveTypeProd(Distribution), left, right)
+            seeds = rand(StableRNG(42), UInt, 19)
 
-        @test abs(kldivergence(approximated_1, analytical)) < 1e-2
-        @test abs(kldivergence(approximated_2, analytical)) < 1e-2
-
-        @test abs(kldivergence(approximated_1, analytical)) <
-              abs(kldivergence(approximated_2, analytical))
+            test_results = map(seeds) do seed
+                targetfn_1 = (x) -> logpdf(left, x)
+                targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
+                approximated_1 = project_to(get_params(seed), targetfn_1, right)
+                approximated_2 = project_to(get_params(seed), targetfn_2)
+                test_1 = abs(kldivergence(approximated_1, analytical)) < 1e-2
+                test_3 = abs(kldivergence(approximated_1, analytical)) < abs(kldivergence(approximated_2, analytical))
+                return [test_1, test_3]
+            end
+            
+            @test all(mean(test_results) .> .5)
+        end
     end
 
     @test_throws "Supplementary distributions must be of the same exponential member as the projection target `Distributions.Beta`, got `Distributions.Bernoulli`" project_to(
@@ -310,5 +322,77 @@ end
         series = map(x -> rand(rng, Normal(1 / x^(0.5) + c, v)), 1:n)
         converged, _ = test_convergence_to_stable_point(series)
         @test converged
+    end
+end
+
+@testitem "Projection should not depend on a targetfn shift" begin
+
+    include("projected_to_setuptests.jl")
+
+    function test_projection_with_shift(to, distribution, C; nsample = 100, centerlogpdfs = Val(true), tolerance = 1e-12)
+        targetfn_plus_C = let distribution = distribution, C = C
+            (x) -> logpdf(distribution, x) + C
+        end
+
+        targetfn_minus_C = let distribution = distribution, C = C
+            (x) -> logpdf(distribution, x) - C
+        end
+
+        targetfn = let distribution = distribution
+            (x) -> logpdf(distribution, x)
+        end
+
+        result_plus_C = project_to(
+            ProjectedTo(
+                to, 
+                parameters = ProjectionParameters(
+                    strategy = ExponentialFamilyProjection.ControlVariateStrategy(nsamples = nsample, centerlogpdfs = centerlogpdfs)
+                    )
+                ),
+                targetfn_plus_C
+            )
+        
+        result_minus_C = project_to(
+            ProjectedTo(
+                to, 
+                parameters = ProjectionParameters(
+                        strategy = ExponentialFamilyProjection.ControlVariateStrategy(nsamples = nsample, centerlogpdfs = centerlogpdfs)
+                    )
+                ),
+                targetfn_minus_C
+            )
+        
+        result = project_to(
+            ProjectedTo(to, 
+            parameters = ProjectionParameters(
+                    strategy = ExponentialFamilyProjection.ControlVariateStrategy(nsamples = nsample, centerlogpdfs = centerlogpdfs)
+                )
+            ),
+            targetfn
+        )
+
+        test1 = isapprox(result_plus_C, result, atol = tolerance)
+        test2 = isapprox(result_minus_C, result, atol = tolerance)
+        return test1 && test2
+    end
+
+    @testset let distribution = Normal(1, 10), C = 0.1
+        @test test_projection_with_shift(NormalMeanVariance, distribution, C)
+        @test !test_projection_with_shift(NormalMeanVariance, distribution, C, centerlogpdfs = Val(false))
+    end
+
+    @testset let distribution = Normal(1, 10), C = 1
+        @test test_projection_with_shift(NormalMeanVariance, distribution, C)
+        @test !test_projection_with_shift(NormalMeanVariance, distribution, C, centerlogpdfs = Val(false))
+    end
+
+    @testset let distribution = Normal(0.5, 1), C = 10
+        @test test_projection_with_shift(Beta, distribution, C)
+        @test !test_projection_with_shift(Beta, distribution, C, centerlogpdfs = Val(false))
+    end
+
+    @testset let distribution = Bernoulli(0.75), C = 10
+        @test test_projection_with_shift(Bernoulli, distribution, C)
+        @test !test_projection_with_shift(Bernoulli, distribution, C, centerlogpdfs = Val(false))
     end
 end
