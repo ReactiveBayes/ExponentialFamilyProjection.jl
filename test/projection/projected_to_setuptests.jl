@@ -82,8 +82,6 @@ function test_convergence_nsamples(
     nsamples_rng = StableRNG(42),
     nsamples_stepsize = ConstantStepsize(0.1),
     nsamples_required_accuracy = 1e-1,
-    kwargs...,
-)
     experiment = map(nsamples_range) do nsamples
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
@@ -99,8 +97,9 @@ function test_convergence_nsamples(
         approximated = project_to(projection, targetfn)
         divergence = test_convergence_metric(approximated, distribution)
         return divergence, approximated
-    end
-
+    end,
+    kwargs...,
+)
     divergence = map(e -> e[1], experiment)
     approximated = map(e -> e[2], experiment)
 
@@ -151,8 +150,6 @@ function test_convergence_niterations(
     niterations_rng = StableRNG(42),
     niterations_stepsize = ConstantStepsize(0.1),
     niterations_required_accuracy = 1e-1,
-    kwargs...,
-)
     experiment = map(niterations_range) do niterations
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
@@ -168,8 +165,10 @@ function test_convergence_niterations(
         approximated = project_to(projection, targetfn)
         divergence = test_convergence_metric(approximated, distribution)
         return divergence, approximated
-    end
-
+    end,
+    kwargs...,
+)
+    
     divergence = map(e -> e[1], experiment)
     approximated = map(e -> e[2], experiment)
 
