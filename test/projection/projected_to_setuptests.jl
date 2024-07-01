@@ -110,7 +110,9 @@ function test_convergence_nsamples(
         @warn "Convergence test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
     end
 
-    return test_required_accuracy && test_convergence_to_stable_point(divergence)
+    test_convergence, series = test_convergence_to_stable_point(divergence)
+
+    return test_required_accuracy && test_convergence, series
 end
 
 _convergence_niterations_default_range(distribution) =
@@ -177,7 +179,9 @@ function test_convergence_niterations(
         @warn "Convergence test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
     end
 
-    return test_required_accuracy && test_convergence_to_stable_point(divergence)
+    test_convergence, series = test_convergence_to_stable_point(divergence)
+
+    return test_required_accuracy && test_convergence, series
 end
 
 # The metric we are using in the tests is `KL` divergence
