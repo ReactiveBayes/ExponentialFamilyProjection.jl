@@ -368,3 +368,68 @@ end
         @test converged
     end
 end
+
+@testitem "Projection should be stable against huge gradients" begin
+    using StableRNGs, BayesBase, ExponentialFamily, Distributions
+
+    # This example is an adaption of inference in RxInfer.jl package
+    # The general idea here is that if we have a variable that is shared 
+    # across many nodes in a graph, the resulting posterior is a product of 
+    # large number of messages which can lead to numerical instability.
+
+    # This is an analytical message update rule for the Bernoulli factor node
+    message_update_rule =
+        (observation) -> begin
+            analytical =
+                Beta(one(observation) + observation, 2one(observation) - observation)
+            # However, instead of only returning the analytical result, we will also return a
+            # lambda function that will be used to compute the posterior during the projection
+            lambda = let analytical = analytical
+                (x) -> logpdf(analytical, x)
+            end
+            # We use the analytical solution only to compare the result in the test
+            return analytical, lambda
+        end
+
+    rng = StableRNG(42)
+
+    # It should also work for the larger number of messages
+    # but then the test takes too much time
+    Nmessages_range = (1000, 2000, 5000)
+
+    for Nmessages in Nmessages_range
+
+        prior = Beta(1, 1)
+        dist = Bernoulli(0.7)
+        data = rand(rng, dist, Nmessages)
+        messages = map(message_update_rule, data)
+        analytical = map(s -> s[1], messages)
+        lambdas = map(s -> s[2], messages)
+
+        analytical_posterior = reduce(
+            (l, r) -> prod(PreserveTypeProd(Distribution), l, r),
+            analytical;
+            init = prior,
+        )
+
+        # The idea here is to test the default configuration, which should be able to handle this case 
+        # Non-default configuration could already solve this issue by simply reducing the stepsize to a very small value
+        projection_config = ProjectedTo(Beta)
+        projection_posterior = project_to(
+            projection_config,
+            (x) -> logpdf(prior, x) + sum(l -> l(x), lambdas),
+        )
+
+        @test all(p -> !isnan(p) && !isinf(p), params(projection_posterior))
+
+        # In the case of the large number of messages the default configuration simply does not 
+        # have enough number iterations to converge, the result still should not have `infs` or `nans` though
+        if Nmessages < 5_000
+            @test mean(projection_posterior) ≈ mean(analytical_posterior) rtol = 1e-1
+            @test mode(projection_posterior) ≈ mode(analytical_posterior) rtol = 1e-1
+            @test 0 < kldivergence(projection_posterior, analytical_posterior) < 1e-1
+        end
+
+    end
+
+end

@@ -244,6 +244,7 @@ function project_to(
             initialpoint;
             stopping_criterion = get_stopping_criterion(parameters),
             stepsize = getstepsize(parameters),
+            direction = BoundedNormUpdateRule(static(1)),
             debug = debug,
             record = record
         )
