@@ -45,15 +45,18 @@
     parameters_from_creation = get_projected_to_parameters(ProjectedTo(Beta))
 
     @test getstrategy(defaultparams) == getstrategy(parameters_from_creation)
-    
+
     @test getniterations(defaultparams) == getniterations(parameters_from_creation)
     @test gettolerance(defaultparams) == gettolerance(parameters_from_creation)
     # Testing `typeof` here since `Manopt` does not implement `==` 
-    @test typeof(getstepsize(defaultparams)) == typeof(getstepsize(parameters_from_creation))
-    @test typeof(get_stopping_criterion(defaultparams)) == typeof(get_stopping_criterion(parameters_from_creation))
+    @test typeof(getstepsize(defaultparams)) ==
+          typeof(getstepsize(parameters_from_creation))
+    @test typeof(get_stopping_criterion(defaultparams)) ==
+          typeof(get_stopping_criterion(parameters_from_creation))
     # These should pass as soon as `Manopt` implements `==`
     @test_broken getstepsize(defaultparams) == getstepsize(parameters_from_creation)
-    @test_broken get_stopping_criterion(defaultparams) == get_stopping_criterion(parameters_from_creation)
+    @test_broken get_stopping_criterion(defaultparams) ==
+                 get_stopping_criterion(parameters_from_creation)
 
     parameters = ProjectionParameters()
     @test get_projected_to_parameters(ProjectedTo(Beta, parameters = parameters)) ===
@@ -270,7 +273,7 @@ end
 @testitem "Projection should decrease cost" begin
 
     using ExponentialFamily, BayesBase, Distributions, Manopt, JET
-    
+
     distributions = [
         (Bernoulli(0.5), Bernoulli(0.5)),
         (Bernoulli(0.1), Bernoulli(0.9)),
@@ -281,10 +284,13 @@ end
         (NormalMeanVariance(-2, 2), NormalMeanVariance(2, 5)),
         (NormalMeanVariance(3, 20), NormalMeanVariance(0.1, 0.1)),
         (Gamma(1, 1), Gamma(10, 10)),
-        (MvNormalMeanCovariance([ 3.14, 2.16 ], [ 1.0 0.0; 0.0 1.0 ]), MvNormalMeanCovariance([ -4.2, 4.2 ], [ 3.14 -0.1; -0.1 4.13 ])),
+        (
+            MvNormalMeanCovariance([3.14, 2.16], [1.0 0.0; 0.0 1.0]),
+            MvNormalMeanCovariance([-4.2, 4.2], [3.14 -0.1; -0.1 4.13]),
+        ),
         (Dirichlet([1, 1]), Dirichlet([2, 2])),
         (LogNormal(-1, 10), LogNormal(3, 4)),
-        (Chisq(2), Chisq(10))
+        (Chisq(2), Chisq(10)),
     ]
 
     for distribution in distributions
@@ -299,17 +305,23 @@ end
             parameters = ProjectionParameters(tolerance = 1e-12, niterations = 1000),
         )
 
-        record = [RecordCost()]
-        targetfn_1 = (x) -> logpdf(left, x)
-        approximated_1 = project_to(prj, targetfn_1, right, record = record)
-        @test all(map((before, after) ->  before > after, record[1:end-1], record[2:end]))
+        @testset "case 1 with supplementary" begin
+            record = [RecordCost()]
+            targetfn_1 = (x) -> logpdf(left, x)
+            approximated_1 = project_to(prj, targetfn_1, right, record = record)
+            recorded_values = record[1].recorded_values
+            @test all(<=(0), diff(recorded_values))
+        end
 
-        record = [RecordCost()]
-        targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
-        approximated_2 = project_to(prj, targetfn_2)
-        @test all(map((before, after) ->  before > after, record[1:end-1], record[2:end]))
+        @testset "case 2 without supplementary" begin
+            record = [RecordCost()]
+            targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
+            approximated_2 = project_to(prj, targetfn_2; record = record)
+            recorded_values = record[1].recorded_values
+            @test all(<=(0), diff(recorded_values))
+        end
     end
-end 
+end
 
 @testitem "Test initial point keyword argument" begin
     using ExponentialFamily, ExponentialFamilyManifolds, BayesBase
