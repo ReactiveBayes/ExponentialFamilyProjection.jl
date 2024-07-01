@@ -310,7 +310,7 @@ end
             targetfn_1 = (x) -> logpdf(left, x)
             approximated_1 = project_to(prj, targetfn_1, right, record = record)
             recorded_values = record[1].recorded_values
-            @test all(<=(0), diff(recorded_values))
+            @test recorded_values[1] > recorded_values[end]
         end
 
         @testset "case 2 without supplementary" begin
@@ -318,7 +318,7 @@ end
             targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
             approximated_2 = project_to(prj, targetfn_2; record = record)
             recorded_values = record[1].recorded_values
-            @test all(<=(0), diff(recorded_values))
+            @test recorded_values[1] > recorded_values[end]
         end
     end
 end

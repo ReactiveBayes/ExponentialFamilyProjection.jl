@@ -176,11 +176,20 @@ end
 using Manopt, StaticTools
 
 """
-    project_to(prj::ProjectedTo, f::F, supplementary...)
+    project_to(prj::ProjectedTo, f::F, supplementary..., initialpoint, kwargs...)
 
-Project the function `f` to the exponential family distribution specified by `prj`.
-Additionally `supplementary` distributions can be provided to project a product of `f` and `supplementary` distributions.
-Note that `supplementary` distributions must be of the same type and conditioner as the target distribution.
+Project function `f` onto the exponential family distribution specified by `prj`.
+
+# Arguments
+- `prj::ProjectedTo`: Target exponential family distribution.
+- `f::F`: Function to be projected.
+- `supplementary...`: Additional distributions to project the product of `f` and these distributions (optional).
+- `initialpoint`: Starting point for optimization (optional).
+- `kwargs...`: Additional arguments passed to `Manopt.gradient_descent!` (optional).
+
+# Notes
+- `supplementary` distributions must match the type and conditioner of the target distribution.
+- See [Manopt.jl documentation](https://manoptjl.org/stable/solvers/gradient_descent/#Manopt.gradient_descent) for details on `gradient_descent!` parameters.
 
 ```jldoctest
 julia> using ExponentialFamily, BayesBase
@@ -198,9 +207,8 @@ function project_to(
     prj::ProjectedTo,
     f::F,
     supplementary...;
-    debug = missing,
     initialpoint = nothing,
-    record = missing
+    kwargs...
 ) where {F}
     M = get_projected_to_manifold(prj)
     parameters = get_projected_to_parameters(prj)
@@ -245,8 +253,7 @@ function project_to(
             stopping_criterion = get_stopping_criterion(parameters),
             stepsize = getstepsize(parameters),
             direction = BoundedNormUpdateRule(static(1)),
-            debug = debug,
-            record = record
+            kwargs...
         )
 
         return convert(
