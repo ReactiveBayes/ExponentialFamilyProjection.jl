@@ -8,6 +8,9 @@
         get_projected_to_parameters,
         get_projected_to_manifold
 
+    import ExponentialFamilyProjection:
+        getstrategy, getniterations, gettolerance, getstepsize, get_stopping_criterion
+
     @test repr(ProjectedTo()) ==
           "ProjectedTo(ExponentialFamily.ExponentialFamilyDistribution)"
     @test repr(ProjectedTo(3)) ==
@@ -38,8 +41,23 @@
     @test get_projected_to_dims(ProjectedTo(Laplace, conditioner = 2.0)) === ()
     @test get_projected_to_conditioner(ProjectedTo(Laplace, conditioner = 2.0)) === 2.0
 
-    @test get_projected_to_parameters(ProjectedTo(Beta)) ===
-          ExponentialFamilyProjection.DefaultProjectionParameters
+    defaultparams = ExponentialFamilyProjection.DefaultProjectionParameters()
+    parameters_from_creation = get_projected_to_parameters(ProjectedTo(Beta))
+
+    @test getstrategy(defaultparams) == getstrategy(parameters_from_creation)
+
+    @test getniterations(defaultparams) == getniterations(parameters_from_creation)
+    @test gettolerance(defaultparams) == gettolerance(parameters_from_creation)
+    # Testing `typeof` here since `Manopt` does not implement `==` 
+    @test typeof(getstepsize(defaultparams)) ==
+          typeof(getstepsize(parameters_from_creation))
+    @test typeof(get_stopping_criterion(defaultparams)) ==
+          typeof(get_stopping_criterion(parameters_from_creation))
+    # These should pass as soon as `Manopt` implements `==`
+    @test_broken getstepsize(defaultparams) == getstepsize(parameters_from_creation)
+    @test_broken get_stopping_criterion(defaultparams) ==
+                 get_stopping_criterion(parameters_from_creation)
+
     parameters = ProjectionParameters()
     @test get_projected_to_parameters(ProjectedTo(Beta, parameters = parameters)) ===
           parameters
@@ -252,6 +270,39 @@ end
     )
 end
 
+@testitem "Test initial point keyword argument" begin
+    using ExponentialFamily, ExponentialFamilyManifolds, BayesBase
+
+    dist = Beta(5, 5)
+    efdist = convert(ExponentialFamilyDistribution, dist)
+    targetfn = (x) -> logpdf(dist, x)
+
+    M = ExponentialFamilyManifolds.get_natural_manifold(Beta, ())
+    initialpoint = ExponentialFamilyManifolds.partition_point(
+        M,
+        getnaturalparameters(convert(ExponentialFamilyDistribution, dist)),
+    )
+
+    projection_with_vector =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = initialpoint)
+    projection_with_vector_repeated =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = initialpoint)
+    projection_with_dist = project_to(ProjectedTo(Beta), targetfn, initialpoint = dist)
+    projection_with_dist_repeated =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = dist)
+    projection_with_efdist = project_to(ProjectedTo(Beta), targetfn, initialpoint = efdist)
+    projection_with_efdist_repeated =
+        project_to(ProjectedTo(Beta), targetfn, initialpoint = efdist)
+
+    @test params(projection_with_vector) === params(projection_with_vector_repeated)
+    @test params(projection_with_dist) === params(projection_with_dist_repeated)
+    @test params(projection_with_vector) === params(projection_with_dist)
+    @test params(projection_with_vector) === params(projection_with_efdist)
+    @test params(projection_with_vector) === params(projection_with_efdist_repeated)
+    @test params(projection_with_dist) === params(projection_with_efdist)
+
+end
+
 @testitem "test_convergence_to_stable_point" begin
     using StableRNGs
 
@@ -259,7 +310,73 @@ end
 
     rng = StableRNG(42)
     for c in (0, 1, 5, 10), v in (1e-3, 1e-2), n in (20, 100)
-        series = map(x -> rand(Normal(1 / x^(0.5) + c, v)), 1:n)
-        @test test_convergence_to_stable_point(series)
+        series = map(x -> rand(rng, Normal(1 / x^(0.5) + c, v)), 1:n)
+        converged, _ = test_convergence_to_stable_point(series)
+        @test converged
     end
+end
+
+@testitem "Projection should be stable against huge gradients" begin
+    using StableRNGs, BayesBase, ExponentialFamily, Distributions
+
+    # This example is an adaption of inference in RxInfer.jl package
+    # The general idea here is that if we have a variable that is shared 
+    # across many nodes in a graph, the resulting posterior is a product of 
+    # large number of messages which can lead to numerical instability.
+
+    # This is an analytical message update rule for the Bernoulli factor node
+    message_update_rule =
+        (observation) -> begin
+            analytical =
+                Beta(one(observation) + observation, 2one(observation) - observation)
+            # However, instead of only returning the analytical result, we will also return a
+            # lambda function that will be used to compute the posterior during the projection
+            lambda = let analytical = analytical
+                (x) -> logpdf(analytical, x)
+            end
+            # We use the analytical solution only to compare the result in the test
+            return analytical, lambda
+        end
+
+    rng = StableRNG(42)
+
+    # It should also work for the larger number of messages
+    # but then the test takes too much time
+    Nmessages_range = (1000, 2000, 5000)
+
+    for Nmessages in Nmessages_range
+
+        prior = Beta(1, 1)
+        dist = Bernoulli(0.7)
+        data = rand(rng, dist, Nmessages)
+        messages = map(message_update_rule, data)
+        analytical = map(s -> s[1], messages)
+        lambdas = map(s -> s[2], messages)
+
+        analytical_posterior = reduce(
+            (l, r) -> prod(PreserveTypeProd(Distribution), l, r),
+            analytical;
+            init = prior,
+        )
+
+        # The idea here is to test the default configuration, which should be able to handle this case 
+        # Non-default configuration could already solve this issue by simply reducing the stepsize to a very small value
+        projection_config = ProjectedTo(Beta)
+        projection_posterior = project_to(
+            projection_config,
+            (x) -> logpdf(prior, x) + sum(l -> l(x), lambdas),
+        )
+
+        @test all(p -> !isnan(p) && !isinf(p), params(projection_posterior))
+
+        # In the case of the large number of messages the default configuration simply does not 
+        # have enough number iterations to converge, the result still should not have `infs` or `nans` though
+        if Nmessages < 5_000
+            @test mean(projection_posterior) ≈ mean(analytical_posterior) rtol = 1e-1
+            @test mode(projection_posterior) ≈ mode(analytical_posterior) rtol = 1e-1
+            @test 0 < kldivergence(projection_posterior, analytical_posterior) < 1e-1
+        end
+
+    end
+
 end
