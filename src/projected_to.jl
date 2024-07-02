@@ -176,20 +176,25 @@ end
 using Manopt, StaticTools
 
 """
-    project_to(prj::ProjectedTo, f::F, supplementary..., initialpoint, kwargs...)
+    project_to(to::ProjectedTo, logf::F, supplementary..., initialpoint, kwargs...)
 
-Project function `f` onto the exponential family distribution specified by `prj`.
+Finds the closest projection of `logf` onto the exponential family distribution specified by `to`.
 
 # Arguments
-- `prj::ProjectedTo`: Target exponential family distribution.
-- `f::F`: Function to be projected.
-- `supplementary...`: Additional distributions to project the product of `f` and these distributions (optional).
-- `initialpoint`: Starting point for optimization (optional).
-- `kwargs...`: Additional arguments passed to `Manopt.gradient_descent!` (optional).
+- `to::ProjectedTo`: Configuration for the projection. Refer to `ProjectedTo` for detailed information.
+- `logf::F`: An (un-normalized) function representing the log-PDF of an arbitrary distribution.
+- `supplementary...`: Additional distributions to project the product of `logf` and these distributions (optional).
+- `initialpoint`: Starting point for the optimization process (optional).
+- `kwargs...`: Additional arguments passed to `Manopt.gradient_descent!` (optional). For details on `gradient_descent!` parameters, see the [Manopt.jl documentation](https://manoptjl.org/stable/solvers/gradient_descent/#Manopt.gradient_descent).
 
-# Notes
-- `supplementary` distributions must match the type and conditioner of the target distribution.
-- See [Manopt.jl documentation](https://manoptjl.org/stable/solvers/gradient_descent/#Manopt.gradient_descent) for details on `gradient_descent!` parameters.
+# Supplementary
+
+The `supplementary` distributions must match the type and conditioner of the target distribution specified in `to`. 
+Including supplementary distributions is equivalent to modified `logf` function as follows:
+
+```julia
+f_modified = (x) -> logf(x) + logpdf(supplementary[1], x) + logpdf(supplementary[2], x) + ...
+```
 
 ```jldoctest
 julia> using ExponentialFamily, BayesBase
@@ -208,7 +213,7 @@ function project_to(
     f::F,
     supplementary...;
     initialpoint = nothing,
-    kwargs...
+    kwargs...,
 ) where {F}
     M = get_projected_to_manifold(prj)
     parameters = get_projected_to_parameters(prj)
@@ -253,7 +258,7 @@ function project_to(
             stopping_criterion = get_stopping_criterion(parameters),
             stepsize = getstepsize(parameters),
             direction = BoundedNormUpdateRule(static(1)),
-            kwargs...
+            kwargs...,
         )
 
         return convert(

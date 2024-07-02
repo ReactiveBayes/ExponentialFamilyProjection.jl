@@ -288,7 +288,7 @@ end
             MvNormalMeanCovariance([3.14, 2.16], [1.0 0.0; 0.0 1.0]),
             MvNormalMeanCovariance([-4.2, 4.2], [3.14 -0.1; -0.1 4.13]),
         ),
-        (Dirichlet([1, 1]), Dirichlet([2, 2])),
+        (Dirichlet([2, 2]), Dirichlet([3, 3])),
         (LogNormal(-1, 10), LogNormal(3, 4)),
         (Chisq(2), Chisq(10)),
     ]
@@ -311,6 +311,11 @@ end
             approximated_1 = project_to(prj, targetfn_1, right, record = record)
             recorded_values = record[1].recorded_values
             @test recorded_values[1] > recorded_values[end]
+            @test (
+                count(v -> v <= 0 || isapprox(v, 0; atol = 1e-6), diff(recorded_values)) /
+                (length(recorded_values) - 1)
+            ) > 0.7
+
         end
 
         @testset "case 2 without supplementary" begin
@@ -319,6 +324,10 @@ end
             approximated_2 = project_to(prj, targetfn_2; record = record)
             recorded_values = record[1].recorded_values
             @test recorded_values[1] > recorded_values[end]
+            @test (
+                count(v -> v <= 0 || isapprox(v, 0; atol = 1e-6), diff(recorded_values)) /
+                (length(recorded_values) - 1)
+            ) > 0.7
         end
     end
 end
@@ -415,10 +424,8 @@ end
         # The idea here is to test the default configuration, which should be able to handle this case 
         # Non-default configuration could already solve this issue by simply reducing the stepsize to a very small value
         projection_config = ProjectedTo(Beta)
-        projection_posterior = project_to(
-            projection_config,
-            (x) -> logpdf(prior, x) + sum(l -> l(x), lambdas),
-        )
+        projection_posterior =
+            project_to(projection_config, (x) -> logpdf(prior, x) + sum(l -> l(x), lambdas))
 
         @test all(p -> !isnan(p) && !isinf(p), params(projection_posterior))
 
