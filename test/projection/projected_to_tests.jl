@@ -213,7 +213,7 @@ end
 end
 
 @testitem "Projection a product with supplementary natural parameters should better than just `ProductOf`" begin
-    using ExponentialFamily, BayesBase, Distributions, JET
+    using ExponentialFamily, BayesBase, Distributions, JET, StableRNGs
     distributions = [
         (Bernoulli(0.5), Bernoulli(0.5)),
         (Bernoulli(0.1), Bernoulli(0.9)),
@@ -242,13 +242,16 @@ end
             ExponentialFamily.exponential_family_typetag(left),
             dims...;
             conditioner = nothing,
-            parameters = ProjectionParameters(tolerance = 1e-12, niterations = 1000),
+            parameters = ProjectionParameters(tolerance = 1e-12, niterations = 2000),
         )
+
+        M = ExponentialFamilyProjection.get_projected_to_manifold(prj)
+        initialpoint = rand(StableRNG(42), M)
 
         targetfn_1 = (x) -> logpdf(left, x)
         targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
-        approximated_1 = project_to(prj, targetfn_1, right)
-        approximated_2 = project_to(prj, targetfn_2)
+        approximated_1 = project_to(prj, targetfn_1, right, initialpoint = initialpoint)
+        approximated_2 = project_to(prj, targetfn_2, initialpoint = initialpoint)
         analytical = prod(PreserveTypeProd(Distribution), left, right)
 
         @test abs(kldivergence(approximated_1, analytical)) < 1e-2
