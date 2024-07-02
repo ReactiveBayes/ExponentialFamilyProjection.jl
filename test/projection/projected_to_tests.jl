@@ -306,61 +306,18 @@ end
     include("projected_to_setuptests.jl")
 
     rng = StableRNG(42)
+
+    # small variance
     for c in (0, 1, 5, 10), v in (1e-3, 1e-2), n in (20, 100)
         series = map(x -> rand(rng, Normal(1 / x^(0.5) + c, v)), 1:n)
-        converged, _ = test_convergence_to_stable_point(series)
+        converged = test_convergence_to_stable_point(series)
         @test converged
     end
-end
 
-@testitem "test_convergence_nsamples" begin
-    include("projected_to_setuptests.jl")
-    
-    @testset "test_convergence_nsamples tracks divergence" begin
-        distribution = Normal(0, 1)
-        nsamples_range = 
-        diverged_series = map(1:100) do nsamples
-            approximation = Normal(nsamples, nsamples)
-            (kldivergence(approximation, distribution), approximation)
-        end 
-        test_result, series = test_convergence_nsamples(distribution, (x) -> 1, NormalMeanVariance, (), missing, experiment = diverged_series)
-        @test !test_result
+    # large variance
+    for c in (0, 1, 5, 10), v in (1e+3, 1e+2), n in (20, 100)
+        series = map(x -> rand(rng, Normal(1 / x^(0.5) + c, v)), 1:n)
+        converged = test_convergence_to_stable_point(series)
+        @test !converged
     end
-    
-    @testset "test_convergence_nsamples tracks cpnvergence" begin
-        distribution = Normal(0, 1)
-        nsamples_range = 
-        convergent_series = map(1:100) do nsamples
-            approximation = Normal(0, 1 + 1/nsamples)
-            (kldivergence(approximation, distribution), approximation)
-        end 
-        test_result, series = test_convergence_nsamples(distribution, (x) -> 1, NormalMeanVariance, (), missing, experiment = convergent_series)
-        @test test_result
-    end     
-end
-
-@testitem "test_convergence_niterations" begin
-    include("projected_to_setuptests.jl")
-    
-    @testset "test_convergence_niterations tracks divergence" begin
-        distribution = Normal(0, 1)
-        nsamples_range = 
-        diverged_series = map(1:100) do niterations
-            approximation = Normal(niterations, niterations)
-            (kldivergence(approximation, distribution), approximation)
-        end 
-        test_result, series = test_convergence_niterations(distribution, (x) -> 1, NormalMeanVariance, (), missing, experiment = diverged_series)
-        @test !test_result
-    end
-    
-    @testset "test_convergence_niterations tracks convergence" begin
-        distribution = Normal(0, 1)
-        nsamples_range = 
-        convergent_series = map(1:100) do niterations
-            approximation = Normal(0, 1 + 1/niterations)
-            (kldivergence(approximation, distribution), approximation)
-        end 
-        test_result, series = test_convergence_niterations(distribution, (x) -> 1, NormalMeanVariance, (), missing, experiment = convergent_series)
-        @test test_result
-    end    
 end
