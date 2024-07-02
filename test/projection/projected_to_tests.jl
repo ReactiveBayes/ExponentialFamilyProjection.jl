@@ -270,6 +270,68 @@ end
     )
 end
 
+@testitem "Projection should decrease cost" begin
+
+    using ExponentialFamily, BayesBase, Distributions, Manopt, JET
+
+    distributions = [
+        (Bernoulli(0.5), Bernoulli(0.5)),
+        (Bernoulli(0.1), Bernoulli(0.9)),
+        (Bernoulli(0.9), Bernoulli(0.1)),
+        (Beta(10, 10), Beta(3, 3)),
+        (Beta(1, 1), Beta(0.1, 3)),
+        (Normal(0, 1), Normal(0, 1)),
+        (NormalMeanVariance(-2, 2), NormalMeanVariance(2, 5)),
+        (NormalMeanVariance(3, 20), NormalMeanVariance(0.1, 0.1)),
+        (Gamma(1, 1), Gamma(10, 10)),
+        (
+            MvNormalMeanCovariance([3.14, 2.16], [1.0 0.0; 0.0 1.0]),
+            MvNormalMeanCovariance([-4.2, 4.2], [3.14 -0.1; -0.1 4.13]),
+        ),
+        (Dirichlet([2, 2]), Dirichlet([3, 3])),
+        (LogNormal(-1, 10), LogNormal(3, 4)),
+        (Chisq(2), Chisq(10)),
+    ]
+
+    for distribution in distributions
+        left = distribution[1]
+        right = distribution[2]
+        dims = size(rand(distribution))
+
+        prj = ProjectedTo(
+            ExponentialFamily.exponential_family_typetag(left),
+            dims...;
+            conditioner = nothing,
+            parameters = ProjectionParameters(tolerance = 1e-12, niterations = 1000),
+        )
+
+        @testset "case 1 with supplementary" begin
+            record = [RecordCost()]
+            targetfn_1 = (x) -> logpdf(left, x)
+            approximated_1 = project_to(prj, targetfn_1, right, record = record)
+            recorded_values = record[1].recorded_values
+            @test recorded_values[1] > recorded_values[end]
+            @test (
+                count(v -> v <= 0 || isapprox(v, 0; atol = 1e-6), diff(recorded_values)) /
+                (length(recorded_values) - 1)
+            ) > 0.7
+
+        end
+
+        @testset "case 2 without supplementary" begin
+            record = [RecordCost()]
+            targetfn_2 = (x) -> logpdf(ProductOf(left, right), x)
+            approximated_2 = project_to(prj, targetfn_2; record = record)
+            recorded_values = record[1].recorded_values
+            @test recorded_values[1] > recorded_values[end]
+            @test (
+                count(v -> v <= 0 || isapprox(v, 0; atol = 1e-6), diff(recorded_values)) /
+                (length(recorded_values) - 1)
+            ) > 0.7
+        end
+    end
+end
+
 @testitem "Test initial point keyword argument" begin
     using ExponentialFamily, ExponentialFamilyManifolds, BayesBase
 
@@ -362,10 +424,8 @@ end
         # The idea here is to test the default configuration, which should be able to handle this case 
         # Non-default configuration could already solve this issue by simply reducing the stepsize to a very small value
         projection_config = ProjectedTo(Beta)
-        projection_posterior = project_to(
-            projection_config,
-            (x) -> logpdf(prior, x) + sum(l -> l(x), lambdas),
-        )
+        projection_posterior =
+            project_to(projection_config, (x) -> logpdf(prior, x) + sum(l -> l(x), lambdas))
 
         @test all(p -> !isnan(p) && !isinf(p), params(projection_posterior))
 
