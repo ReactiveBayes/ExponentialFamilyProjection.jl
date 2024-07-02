@@ -42,7 +42,7 @@ end
 ProjectedTo(
     dims::Vararg{Int};
     conditioner = nothing,
-    parameters = DefaultProjectionParameters,
+    parameters = DefaultProjectionParameters(),
 ) = ProjectedTo(
     ExponentialFamilyDistribution,
     dims...,
@@ -53,7 +53,7 @@ function ProjectedTo(
     ::Type{T},
     dims...;
     conditioner::C = nothing,
-    parameters::P = DefaultProjectionParameters,
+    parameters::P = DefaultProjectionParameters(),
 ) where {T,C,P}
     # Check that `dims` are all integers
     if !all(d -> typeof(d) <: Int, dims)
@@ -118,7 +118,7 @@ end
 
 Return the default parameters for the projection procedure.
 """
-const DefaultProjectionParameters = ProjectionParameters()
+DefaultProjectionParameters() = ProjectionParameters() # do not use `const DefaultProjectionParameters = ProjectionParameters()` here since it reuses the `rng` then
 
 getstrategy(parameters::ProjectionParameters) = parameters.strategy
 getniterations(parameters::ProjectionParameters) = parameters.niterations
@@ -128,8 +128,9 @@ getstepsize(parameters::ProjectionParameters) = parameters.stepsize
 with_buffer(f::F, parameters::ProjectionParameters) where {F} =
     with_buffer(f, parameters.usebuffer, parameters)
 
-with_buffer(f::F, ::Val{false}, parameters::ProjectionParameters) where {F} = f(nothing)
-with_buffer(f::F, ::Val{true}, parameters::ProjectionParameters) where {F} =
+with_buffer(f::F, buffer, ::ProjectionParameters) where {F} = f(buffer)
+with_buffer(f::F, ::Val{false}, ::ProjectionParameters) where {F} = f(nothing)
+with_buffer(f::F, ::Val{true}, ::ProjectionParameters) where {F} =
     let buffer = MallocSlabBuffer()
         try
             f(buffer)
@@ -193,7 +194,13 @@ julia> project_to(prj, f) isa ExponentialFamily.Beta
 true
 ```
 """
-function project_to(prj::ProjectedTo, f::F, supplementary...; debug = missing) where {F}
+function project_to(
+    prj::ProjectedTo,
+    f::F,
+    supplementary...;
+    debug = missing,
+    initialpoint = nothing,
+) where {F}
     M = get_projected_to_manifold(prj)
     parameters = get_projected_to_parameters(prj)
 
@@ -215,7 +222,8 @@ function project_to(prj::ProjectedTo, f::F, supplementary...; debug = missing) w
         return copy(getnaturalparameters(supplementary_ef))
     end
 
-    initialpoint = getinitialpoint(getstrategy(parameters), M)
+    initialpoint = preprocess_initialpoint(initialpoint, M, parameters)
+
     state = prepare_state!(
         getstrategy(parameters),
         f,
@@ -243,4 +251,47 @@ function project_to(prj::ProjectedTo, f::F, supplementary...; debug = missing) w
             convert(ExponentialFamilyDistribution, M, q),
         )
     end
+end
+
+# This function preprocess the initial point for the projection
+# If the initial point is not provided, it generates a new one with the `getinitialpoint` function
+function preprocess_initialpoint(initialpoint::Nothing, M, parameters)
+    return getinitialpoint(getstrategy(parameters), M)
+end
+
+function preprocess_initialpoint(initialpoint::Any, M, parameters)
+    return preprocess_initialpoint(
+        ExponentialFamily.exponential_family_typetag(M),
+        initialpoint,
+        M,
+        parameters,
+    )
+end
+
+# If the initial point is provided as the distribution type which we project on to,
+# we generate a new initial point using the `naturalparameters` of the distribution
+function preprocess_initialpoint(::Type{T}, initialpoint::T, M, parameters) where {T}
+    return preprocess_initialpoint(
+        T,
+        convert(ExponentialFamilyDistribution, initialpoint),
+        M,
+        parameters,
+    )
+end
+
+function preprocess_initialpoint(
+    ::Type{T},
+    initialpoint::ExponentialFamilyDistribution{T},
+    M,
+    parameters,
+) where {T}
+    return ExponentialFamilyManifolds.partition_point(
+        M,
+        copy(getnaturalparameters(initialpoint)),
+    )
+end
+
+# Otherwise we just copy the initial point, since we use it for the optimization in place
+function preprocess_initialpoint(_, initialpoint::AbstractArray, M, parameters)
+    return copy(initialpoint)
 end
