@@ -456,30 +456,40 @@ end
     @testset "Extreme Beta skewed to right" begin
         extreme = Beta(1e11, 1)
         projection_config = ProjectedTo(Beta)
-        projection_posterior = project_to(
-            projection_config,
-            (x) -> logpdf(extreme, x),
-        )
+        projection_posterior = project_to(projection_config, (x) -> logpdf(extreme, x))
         @test !isnan(mean(projection_posterior))
     end
 
     @testset "Extreme Beta skewed to left" begin
         extreme = Beta(1, 1e11)
         projection_config = ProjectedTo(Beta)
-        projection_posterior = project_to(
-            projection_config,
-            (x) -> logpdf(extreme, x),
-        )
+        projection_posterior = project_to(projection_config, (x) -> logpdf(extreme, x))
         @test !isnan(mean(projection_posterior))
     end
 
     @testset "Normal with extremly small std" begin
         extreme = Normal(0, 1e-11)
         projection_config = ProjectedTo(NormalMeanVariance)
-        projection_posterior = project_to(
-            projection_config,
-            (x) -> logpdf(extreme, x),
-        )
+        projection_posterior = project_to(projection_config, (x) -> logpdf(extreme, x))
         @test !isnan(mean(projection_posterior))
     end
+end
+
+@testitem "do not produce debug statements by default" begin
+    using ExponentialFamilyProjection, StableRNGs, ExponentialFamily, Manopt, JET
+
+    rng = StableRNG(42)
+    prj = ProjectedTo(Beta)
+    targetfn = (x) -> rand(rng) > 0.5 ? 1 : -1
+
+    @test_logs (:warn, r"The cost increased.*") match_mode = :any project_to(
+        prj,
+        targetfn,
+        debug = [Manopt.DebugWarnIfCostIncreases()],
+    )
+
+    # Do not produce debug output by default
+    @test_logs match_mode = :all project_to(prj, targetfn)
+    @test_logs match_mode = :all project_to(prj, targetfn, debug = [])
+    
 end
