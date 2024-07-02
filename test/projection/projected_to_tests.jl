@@ -385,7 +385,7 @@ end
     using BayesBase, ExponentialFamily, Distributions
 
     @testset "Extreme Beta skewed to right" begin
-        extreme = Beta(1e8, 1)
+        extreme = Beta(1e11, 1)
         projection_config = ProjectedTo(Beta)
         projection_posterior = project_to(
             projection_config,
@@ -395,7 +395,7 @@ end
     end
 
     @testset "Extreme Beta skewed to left" begin
-        extreme = Beta(1, 1e8)
+        extreme = Beta(1, 1e11)
         projection_config = ProjectedTo(Beta)
         projection_posterior = project_to(
             projection_config,
