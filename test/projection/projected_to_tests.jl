@@ -306,9 +306,18 @@ end
     include("projected_to_setuptests.jl")
 
     rng = StableRNG(42)
+
+    # small variance
     for c in (0, 1, 5, 10), v in (1e-3, 1e-2), n in (20, 100)
         series = map(x -> rand(rng, Normal(1 / x^(0.5) + c, v)), 1:n)
-        converged, _ = test_convergence_to_stable_point(series)
+        converged = test_convergence_to_stable_point(series)
         @test converged
+    end
+
+    # large variance
+    for c in (0, 1, 5, 10), v in (1e+3, 1e+2), n in (20, 100)
+        series = map(x -> rand(rng, Normal(1 / x^(0.5) + c, v)), 1:n)
+        converged = test_convergence_to_stable_point(series)
+        @test !converged
     end
 end

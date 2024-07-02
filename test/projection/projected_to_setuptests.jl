@@ -21,15 +21,9 @@ function test_projection_convergence(
         ismissing(conditioner) ?
         getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
 
-    test1, series1 =
+    test1 =
         test_convergence_nsamples(distribution, targetfn, T, dims, conditioner; kwargs...)
-
-    if !test1
-        @warn "`nsamples` convergence test for $(distribution) failed. $(series1)"
-        return false
-    end
-
-    test2, series2 = test_convergence_niterations(
+    test2 = test_convergence_niterations(
         distribution,
         targetfn,
         T,
@@ -37,11 +31,6 @@ function test_projection_convergence(
         conditioner;
         kwargs...,
     )
-
-    if !test2
-        @warn "`niterations` convergence test for $(distribution) failed. $(series2)"
-        return false
-    end
 
     return test1 && test2
 end
@@ -84,6 +73,7 @@ function test_convergence_nsamples(
     nsamples_required_accuracy = 1e-1,
     kwargs...,
 )
+
     experiment = map(nsamples_range) do nsamples
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
@@ -107,10 +97,17 @@ function test_convergence_nsamples(
     test_required_accuracy = any(<(nsamples_required_accuracy), divergence)
 
     if !test_required_accuracy
-        @warn "Convergence test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        @warn "`nsamples` accuracy test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
     end
 
-    return test_required_accuracy && test_convergence_to_stable_point(divergence)
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`nsamples` convergence test for $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
 end
 
 _convergence_niterations_default_range(distribution) =
@@ -151,6 +148,7 @@ function test_convergence_niterations(
     niterations_required_accuracy = 1e-1,
     kwargs...,
 )
+
     experiment = map(niterations_range) do niterations
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
@@ -174,10 +172,17 @@ function test_convergence_niterations(
     test_required_accuracy = any(<(niterations_required_accuracy), divergence)
 
     if !test_required_accuracy
-        @warn "Convergence test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        @warn "`niterations` accuracy test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
     end
 
-    return test_required_accuracy && test_convergence_to_stable_point(divergence)
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`niterations` convergence test for $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
 end
 
 # The metric we are using in the tests is `KL` divergence
@@ -206,7 +211,7 @@ function test_convergence_to_stable_point(
     valthreshold = 1e-4,
 )
     if all(<(valthreshold), abs.(series))
-        return true, series
+        return true
     end
 
     # We check for each `window_size` that the moving std converges to zero
@@ -227,10 +232,10 @@ function test_convergence_to_stable_point(
         # For the test to pass we require that at least `20%` of
         # consecutive points at the end are less than `stdthreshold`
         if count < (length(movingstd) ÷ 5)
-            return false, series
+            return false
         end
 
     end
 
-    return true, series
+    return true
 end
