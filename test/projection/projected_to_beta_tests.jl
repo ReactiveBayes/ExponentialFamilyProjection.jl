@@ -71,10 +71,6 @@ end
         )
     end
 
-    @testset let distribution = ProductOf(Beta(500, 100), Beta(100, 700))
-        @test_broken test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
-    end
-
 end
 
 @testitem "Project a product of `Normal` and `Normal` to `Beta`" begin

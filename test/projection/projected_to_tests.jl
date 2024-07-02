@@ -380,3 +380,37 @@ end
     end
 
 end
+
+@testitem "Extreme projections should not produce NaNs" begin
+    using BayesBase, ExponentialFamily, Distributions
+
+    @testset "Extreme Beta skewed to right" begin
+        extreme = Beta(1e8, 1)
+        projection_config = ProjectedTo(Beta)
+        projection_posterior = project_to(
+            projection_config,
+            (x) -> logpdf(extreme, x),
+        )
+        @test !isnan(mean(projection_posterior))
+    end
+
+    @testset "Extreme Beta skewed to left" begin
+        extreme = Beta(1, 1e8)
+        projection_config = ProjectedTo(Beta)
+        projection_posterior = project_to(
+            projection_config,
+            (x) -> logpdf(extreme, x),
+        )
+        @test !isnan(mean(projection_posterior))
+    end
+
+    @testset "Normal with extremly small std" begin
+        extreme = Normal(0, 1e-11)
+        projection_config = ProjectedTo(NormalMeanVariance)
+        projection_posterior = project_to(
+            projection_config,
+            (x) -> logpdf(extreme, x),
+        )
+        @test !isnan(mean(projection_posterior))
+    end
+end
