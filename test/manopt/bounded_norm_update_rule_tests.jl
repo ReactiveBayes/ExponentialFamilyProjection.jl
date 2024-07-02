@@ -10,7 +10,7 @@
     grad_f(M, p) = 2 * p
 
     # The `apply_update_rules_for_test` function applies different update rules to the optimization problem and gradient descent state, 
-    # returning the resulting points for testing.
+    # returning the unbounded gradient as the first argument and a collection of bounded gradients for testing.
     function apply_update_rules_for_test(p, limit)
         cpa = DefaultManoptProblem(M, ManifoldGradientObjective(f, grad_f))
         gst = GradientDescentState(M, zero(p))
@@ -31,42 +31,48 @@
             1,
         )
         X_bounded_twice = copy(X)
-        return X_identity, X_bounded_with_float, X_bounded_with_static, X_bounded_twice
+
+        X_bounded = (X_bounded_with_float, X_bounded_with_static, X_bounded_twice)
+
+        return X_identity, X_bounded
     end
 
     @testset "`X` is above the limit" begin
-        # The point `p` should produce the gradient, which is above the limit
-        p = [100.0, 100.0, 100.0]
-
-        for limit in (10, 5, 1, 0.1)
-
-            X_identity, X_bounded_with_float, X_bounded_with_static, X_bounded_twice =
-                apply_update_rules_for_test(p, limit)
+        # The points in `pts` should produce the gradient, which is above the limit
+        pts = (
+            [100.0, 100.0, 100.0],
+            [100.0, 100.0, 1.0],
+            [100.0, 1.0, 100.0],
+            [1.0, 100.0, 100.0],
+        )
+        for limit in (10, 5, 1, 0.1), p in pts
+            X_identity, X_bounded = apply_update_rules_for_test(p, limit)
 
             @test norm(M, p, X_identity) > limit
-            @test norm(M, p, X_bounded_with_float) ≈ limit
-            @test norm(M, p, X_bounded_with_static) ≈ limit
-            @test norm(M, p, X_bounded_twice) ≈ limit
 
+            for X in X_bounded
+                @test norm(M, p, X) ≈ limit
+            end
         end
     end
 
     @testset "`X` is below the limit" begin
-        # The point `p` should produce the gradient, which is below the limit
-        p = [0.1, 0.1, 0.1]
-
-        for limit in (10, 5, 1)
-
-            X_identity, X_bounded_with_float, X_bounded_with_static, X_bounded_twice =
-                apply_update_rules_for_test(p, limit)
+        # The points in `pts` should produce the gradient, which is below the limit
+        pts = (
+            [0.0, 0.0, 0.0],
+            [0.1, 0.1, 0.1],
+            [0.1, 0.1, 0.0],
+            [0.1, 0.0, 0.1],
+            [0.0, 0.1, 0.1],
+        )
+        for limit in (10, 5, 1), p in pts
+            X_identity, X_bounded = apply_update_rules_for_test(p, limit)
 
             @test norm(M, p, X_identity) < limit
-            @test norm(M, p, X_bounded_with_float) <= limit &&
-                  norm(M, p, X_bounded_with_float) == norm(M, p, X_identity)
-            @test norm(M, p, X_bounded_with_static) <= limit &&
-                  norm(M, p, X_bounded_with_static) == norm(M, p, X_identity)
-            @test norm(M, p, X_bounded_twice) <= limit &&
-                  norm(M, p, X_bounded_twice) == norm(M, p, X_identity)
+
+            for X in X_bounded
+                @test norm(M, p, X) <= limit && norm(M, p, X) == norm(M, p, X_identity)
+            end
         end
     end
 
