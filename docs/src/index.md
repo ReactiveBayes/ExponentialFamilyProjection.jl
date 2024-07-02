@@ -125,6 +125,16 @@ result #hide
 
 As in previous examples the result is pretty close to the actual `hiddengaussian` used to define the `targetf`. 
 
+## Manopt extensions
+
+### Bounded direction update rule
+
+The `ExponentialFamilyProjection.jl` package implements a specialized gradient direction rule that limits the norm (manifold-specific) of the gradient to a pre-specified value.
+
+```@docs
+ExponentialFamilyProjection.BoundedNormUpdateRule
+```
+
 ## Index
 
 ```@index

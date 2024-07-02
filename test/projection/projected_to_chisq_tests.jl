@@ -11,4 +11,8 @@
     @testset let distribution = Chisq(4.0)
         @test_broken test_projection_convergence(distribution)
     end
+
+    @testset let distribution = Chisq(10.0)
+        @test_broken test_projection_convergence(distribution)
+    end
 end
