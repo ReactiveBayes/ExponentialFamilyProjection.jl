@@ -245,6 +245,10 @@ function project_to(
     )
     strategy = with_state(getstrategy(parameters), state)
 
+    # We disable the default `debug` statements, which are set in `Manopt` 
+    # in order to improve the performance a little bit
+    kwargs = !haskey(kwargs, :debug) ? (; kwargs..., debug = missing) : kwargs
+
     return with_buffer(parameters) do buffer
 
         g_grad_g! = CVICostGradientObjective(f, supplementary_η, strategy, buffer)
