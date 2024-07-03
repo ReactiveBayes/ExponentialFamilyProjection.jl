@@ -79,6 +79,7 @@ end
         prepare_state!,
         getsamples,
         getlogpdfs,
+        getlogbasemeasures,
         getsufficientstatistics,
         getgradsamples
 
@@ -149,10 +150,12 @@ end
                 @test getlogpdfs(state3) === getlogpdfs(state3_prepared)
                 @test getsufficientstatistics(state3) ===
                       getsufficientstatistics(state3_prepared)
+                @test getlogbasemeasures(state3) == getlogbasemeasures(state3_prepared)
                 @test getgradsamples(state3) === getgradsamples(state3_prepared)
 
                 @test getsamples(state1) == getsamples(state3)
                 @test getlogpdfs(state1) == getlogpdfs(state3)
+                @test getlogbasemeasures(state1) == getlogbasemeasures(state3)
                 @test getsufficientstatistics(state1) == getsufficientstatistics(state3)
                 @test getgradsamples(state1) == getgradsamples(state3)
             end
