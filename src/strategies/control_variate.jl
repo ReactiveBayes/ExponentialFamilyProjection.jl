@@ -47,12 +47,14 @@ function prepare_state!(
     strategy::ControlVariateStrategy,
     targetfn::F,
     distribution,
+    supplementary_η
 ) where {F}
     return prepare_state!(
         getstate(strategy),
         strategy,
         convert(InplaceLogpdf, targetfn),
         distribution,
+        supplementary_η
     )
 end
 
@@ -83,6 +85,7 @@ function prepare_state!(
     strategy::ControlVariateStrategy,
     targetfn::InplaceLogpdf,
     distribution,
+    supplementary_η
 )
 
     # If the `state` saved in `ControlVariateStrategy` is `nothing`
@@ -107,7 +110,7 @@ function prepare_state!(
         gradsamples = gradsamples,
     )
 
-    return prepare_state!(state, strategy, targetfn, distribution)
+    return prepare_state!(state, strategy, targetfn, distribution, supplementary_η)
 end
 
 function prepare_state!(
@@ -115,6 +118,7 @@ function prepare_state!(
     strategy::ControlVariateStrategy,
     targetfn::InplaceLogpdf,
     distribution,
+    supplementary_η
 )
 
     # We need to reset the RNG state every time we prepare the state
@@ -136,10 +140,10 @@ function prepare_state!(
 
     targetfn(state.logpdfs, sample_container)
 
-    number_of_supplemetary = length(obj.supplementary_η)
+    number_of_supplemetary = length(supplementary_η)
 
     foreach(enumerate(sample_container)) do (i, sample)
-        @inbounds state.logbasemeasures[i] = log(ExponentialFamily.basemeasure(distribution, sample))
+        @inbounds state.logbasemeasures[i] = (1 - number_of_supplemetary) * log(ExponentialFamily.basemeasure(distribution, sample))
         @inbounds logpdf = state.logpdfs[i]
 
         sufficientstatistics = __control_variate_fast_pack_parameters(
@@ -149,7 +153,7 @@ function prepare_state!(
         @turbo warn_check_args = false for j = 1:J
             @inbounds state.sufficientstatistics[j, i] = sufficientstatistics[j]
             @inbounds state.gradsamples[j, i] =
-                ((number_of_supplemetary - 1)*state.logbasemeasures[i] + logpdf) * (state.sufficientstatistics[j, i] - glogpartion[j])
+                (-state.logbasemeasures[i] + logpdf) * (state.sufficientstatistics[j, i] - glogpartion[j])
         end
     end
 
@@ -170,8 +174,7 @@ function compute_cost(
     gradlogpartition,
     inv_fisher,
 )   
-    number_of_supplemetary = length(obj.supplementary_η)
-    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition + (1-number_of_supplemetary)*mean(state.logbasemeasures)
+    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition + mean(state.logbasemeasures)
 end
 
 function compute_gradient!(
