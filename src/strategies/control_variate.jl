@@ -56,9 +56,10 @@ function prepare_state!(
     )
 end
 
-Base.@kwdef struct ControlVariateStrategyState{M,L,F,G}
+Base.@kwdef struct ControlVariateStrategyState{M,L,LB,F,G}
     samples::M
     logpdfs::L
+    logbasemeasures::LB
     sufficientstatistics::F
     gradsamples::G
 end
@@ -66,6 +67,7 @@ end
 function Base.:(==)(a::ControlVariateStrategyState, b::ControlVariateStrategyState)::Bool
     return a.samples == b.samples &&
            a.logpdfs == b.logpdfs &&
+           a.logbasemeasures == b.logbasemeasures &&
            a.sufficientstatistics == b.sufficientstatistics &&
            a.gradsamples == b.gradsamples
 end
@@ -74,6 +76,7 @@ getsamples(state::ControlVariateStrategyState) = state.samples
 getlogpdfs(state::ControlVariateStrategyState) = state.logpdfs
 getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
 getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
+getlogbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
 
 function prepare_state!(
     ::Nothing,
@@ -88,6 +91,7 @@ function prepare_state!(
     rng = getrng(strategy)
     samples = rand(rng, distribution, nsamples)
     logpdfs = zeros(paramfloattype(distribution), nsamples)
+    logbasemeasures = zeros(paramfloattype(distribution), nsamples)
     sufficientstatistics = zeros(
         paramfloattype(distribution),
         length(getnaturalparameters(distribution)),
@@ -98,6 +102,7 @@ function prepare_state!(
     state = ControlVariateStrategyState(
         samples = samples,
         logpdfs = logpdfs,
+        logbasemeasures = logbasemeasures,
         sufficientstatistics = sufficientstatistics,
         gradsamples = gradsamples,
     )
@@ -131,7 +136,10 @@ function prepare_state!(
 
     targetfn(state.logpdfs, sample_container)
 
+    number_of_supplemetary = length(obj.supplementary_η)
+
     foreach(enumerate(sample_container)) do (i, sample)
+        @inbounds state.logbasemeasures[i] = log(ExponentialFamily.basemeasure(distribution, sample))
         @inbounds logpdf = state.logpdfs[i]
 
         sufficientstatistics = __control_variate_fast_pack_parameters(
@@ -141,7 +149,7 @@ function prepare_state!(
         @turbo warn_check_args = false for j = 1:J
             @inbounds state.sufficientstatistics[j, i] = sufficientstatistics[j]
             @inbounds state.gradsamples[j, i] =
-                logpdf * (state.sufficientstatistics[j, i] - glogpartion[j])
+                ((number_of_supplemetary - 1)*state.logbasemeasures[i] + logpdf) * (state.sufficientstatistics[j, i] - glogpartion[j])
         end
     end
 
@@ -161,8 +169,9 @@ function compute_cost(
     logpartition,
     gradlogpartition,
     inv_fisher,
-)
-    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition
+)   
+    number_of_supplemetary = length(obj.supplementary_η)
+    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition + (1-number_of_supplemetary)*mean(state.logbasemeasures)
 end
 
 function compute_gradient!(
