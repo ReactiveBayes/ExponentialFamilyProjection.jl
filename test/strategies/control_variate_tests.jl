@@ -150,7 +150,7 @@ end
                 @test getlogpdfs(state3) === getlogpdfs(state3_prepared)
                 @test getsufficientstatistics(state3) ===
                       getsufficientstatistics(state3_prepared)
-                @test getlogbasemeasures(state3) == getlogbasemeasures(state3_prepared)
+                @test getlogbasemeasures(state3) === getlogbasemeasures(state3_prepared)
                 @test getgradsamples(state3) === getgradsamples(state3_prepared)
 
                 @test getsamples(state1) == getsamples(state3)
