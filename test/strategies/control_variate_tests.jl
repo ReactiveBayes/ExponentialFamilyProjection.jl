@@ -47,15 +47,27 @@
     end
 
     @testset "state" begin 
-        ef = convert(ExponentialFamilyDistribution, Beta(5, 5))
-        state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef)
-        state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef)
-        @test state1 == state2
-        @test ControlVariateStrategy(state = state1) == ControlVariateStrategy(state = state2)
+        distributions = [Beta(5, 5), Chisq(10)]
+        for dist in distributions
+            ef = convert(ExponentialFamilyDistribution, Beta(5, 5))
+            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, ())
+            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, ())
+            @test state1 == state2
+            @test ControlVariateStrategy(state = state1) == ControlVariateStrategy(state = state2)
 
-        state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef)
-        state2 = prepare_state!(ControlVariateStrategy(), (x) -> 2, ef)
-        @test state1 != state2
+            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef,))
+            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef,))
+            
+            @test state1 == state2 
+
+            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
+            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
+            @test state1 == state2 
+        
+            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, ())
+            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 2, ef, ())
+            @test state1 != state2
+        end
     end
 end
 
@@ -89,17 +101,18 @@ end
         for targetfn in [targetfn1, targetfn2], nsamples in (100, 200)
             ef = convert(ExponentialFamilyDistribution, dist)
 
-            @testset "Empty state should create new state every time" begin
+            @testset "Empty state should create new state every time (no supplementary_η)" begin
                 strategy = ControlVariateStrategy(nsamples = nsamples, state = nothing)
 
                 @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) prepare_state!(
                     strategy,
                     targetfn,
                     ef,
+                    ()
                 )
 
-                state1 = prepare_state!(strategy, targetfn, ef)
-                state2 = prepare_state!(strategy, targetfn, ef)
+                state1 = prepare_state!(strategy, targetfn, ef, ())
+                state2 = prepare_state!(strategy, targetfn, ef, ())
 
                 @test state1 !== state2
                 # `==` check that the content of the arrays are similar 
@@ -115,19 +128,21 @@ end
 
                 samples = rand(ef, nsamples)
                 logpdfs = zeros(paramfloattype(ef), nsamples)
+                logbasemeasures = zeros(paramfloattype(ef), nsamples)
                 sufficientstatistics =
                     zeros(paramfloattype(ef), length(getnaturalparameters(ef)), nsamples)
                 gradsamples = similar(sufficientstatistics)
                 state3 = ControlVariateStrategyState(
                     samples = samples,
                     logpdfs = logpdfs,
+                    logbasemeasures = logbasemeasures,
                     sufficientstatistics = sufficientstatistics,
                     gradsamples = gradsamples,
                 )
 
                 strategy_with_state =
                     ControlVariateStrategy(nsamples = nsamples, state = state3)
-                state3_prepared = prepare_state!(strategy_with_state, targetfn, ef)
+                state3_prepared = prepare_state!(strategy_with_state, targetfn, ef, ())
 
                 @test state3 === state3_prepared
                 @test getsamples(state3) === getsamples(state3_prepared)
