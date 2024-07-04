@@ -157,6 +157,7 @@ end
         Dirichlet([1, 1]),
         NormalMeanVariance(0.0, 1.0),
         MvNormalMeanCovariance([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
+        Chisq(30.0)
     ]
 
     for distribution in distributions

@@ -1,4 +1,4 @@
-using StableRNGs, LoopVectorization, Bumper
+using StableRNGs, LoopVectorization, Bumper, FillArrays
 
 import BayesBase: InplaceLogpdf
 
@@ -47,14 +47,14 @@ function prepare_state!(
     strategy::ControlVariateStrategy,
     targetfn::F,
     distribution,
-    supplementary_η
+    supplementary_η,
 ) where {F}
     return prepare_state!(
         getstate(strategy),
         strategy,
         convert(InplaceLogpdf, targetfn),
         distribution,
-        supplementary_η
+        supplementary_η,
     )
 end
 
@@ -76,31 +76,30 @@ end
 
 getsamples(state::ControlVariateStrategyState) = state.samples
 getlogpdfs(state::ControlVariateStrategyState) = state.logpdfs
+getlogbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
 getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
 getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
-getlogbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
 
 function prepare_state!(
     ::Nothing,
     strategy::ControlVariateStrategy,
     targetfn::InplaceLogpdf,
     distribution,
-    supplementary_η
+    supplementary_η,
 )
 
     # If the `state` saved in `ControlVariateStrategy` is `nothing`
     # we simply create new containers for the samples, logpdfs, etc.
     nsamples = getnsamples(strategy)
     rng = getrng(strategy)
-    samples = rand(rng, distribution, nsamples)
-    logpdfs = zeros(paramfloattype(distribution), nsamples)
-    logbasemeasures = zeros(paramfloattype(distribution), nsamples)
-    sufficientstatistics = zeros(
-        paramfloattype(distribution),
-        length(getnaturalparameters(distribution)),
-        nsamples,
-    )
-    gradsamples = similar(sufficientstatistics)
+    samples = prepare_samples_container(rng, distribution, nsamples, supplementary_η)
+    logpdfs = prepare_logpdfs_container(rng, distribution, nsamples, supplementary_η)
+    logbasemeasures =
+        prepare_logbasemeasures_container(rng, distribution, nsamples, supplementary_η)
+    sufficientstatistics =
+        prepare_sufficientstatistics_container(rng, distribution, nsamples, supplementary_η)
+    gradsamples =
+        prepare_gradsamples_container(rng, distribution, nsamples, supplementary_η)
 
     state = ControlVariateStrategyState(
         samples = samples,
@@ -113,12 +112,57 @@ function prepare_state!(
     return prepare_state!(state, strategy, targetfn, distribution, supplementary_η)
 end
 
+# The following functions are used to prepare the containers for the samples, logpdfs, etc.
+prepare_samples_container(rng, distribution, nsamples, supplementary_η) =
+    rand(rng, distribution, nsamples)
+prepare_logpdfs_container(rng, distribution, nsamples, supplementary_η) =
+    zeros(paramfloattype(distribution), nsamples)
+prepare_sufficientstatistics_container(rng, distribution, nsamples, supplementary_η) =
+    zeros(
+        paramfloattype(distribution),
+        length(getnaturalparameters(distribution)),
+        nsamples,
+    )
+prepare_gradsamples_container(rng, distribution, nsamples, supplementary_η) =
+    prepare_sufficientstatistics_container(rng, distribution, nsamples, supplementary_η)
+# `logbasemeasures` container is a bit different, if the basemeasure is known to be constant, the 
+# `log` of it can be precomputed and stored in the `lazy` container without actually allocating any space
+prepare_logbasemeasures_container(rng, distribution, nsamples, supplementary_η) =
+    prepare_logbasemeasures_container(
+        ExponentialFamily.isbasemeasureconstant(distribution),
+        rng,
+        distribution,
+        nsamples,
+        supplementary_η,
+    )
+
+# We use `Fill` from `FillArrays` to create a container with the same value repeated `nsamples` times
+# It does not allocate any memory, just stores the value and the number of times it should be repeated
+prepare_logbasemeasures_container(
+    ::ConstantBaseMeasure,
+    rng,
+    distribution,
+    nsamples,
+    supplementary_η,
+) = Fill(
+    (1 - length(supplementary_η)) * log(basemeasure(distribution, rand(rng, distribution))),
+    nsamples,
+)
+# If the basemeasure is not constant, we allocate the memory
+prepare_logbasemeasures_container(
+    ::NonConstantBaseMeasure,
+    rng,
+    distribution,
+    nsamples,
+    supplementary_η,
+) = zeros(paramfloattype(distribution), nsamples)
+
 function prepare_state!(
     state::ControlVariateStrategyState,
     strategy::ControlVariateStrategy,
     targetfn::InplaceLogpdf,
     distribution,
-    supplementary_η
+    supplementary_η,
 )
 
     # We need to reset the RNG state every time we prepare the state
@@ -140,20 +184,30 @@ function prepare_state!(
 
     targetfn(state.logpdfs, sample_container)
 
-    number_of_supplemetary = length(supplementary_η)
+    one_minus_n_of_supplementary = 1 - length(supplementary_η)
+
+    nonconstantbasemeasure =
+        ExponentialFamily.isbasemeasureconstant(distribution) === NonConstantBaseMeasure()
 
     foreach(enumerate(sample_container)) do (i, sample)
-        @inbounds state.logbasemeasures[i] = (1 - number_of_supplemetary) * log(ExponentialFamily.basemeasure(distribution, sample))
-        @inbounds logpdf = state.logpdfs[i]
+        # if `basemeasure` is constant we assume that 
+        # the `log` of it has been precomputed before
+        if nonconstantbasemeasure
+            @inbounds state.logbasemeasures[i] =
+                one_minus_n_of_supplementary *
+                log(ExponentialFamily.basemeasure(distribution, sample))
+        end
 
         sufficientstatistics = __control_variate_fast_pack_parameters(
             ExponentialFamily.sufficientstatistics(distribution, sample),
         )
 
+        @inbounds logpdf = state.logpdfs[i]
         @turbo warn_check_args = false for j = 1:J
             @inbounds state.sufficientstatistics[j, i] = sufficientstatistics[j]
             @inbounds state.gradsamples[j, i] =
-                (-state.logbasemeasures[i] + logpdf) * (state.sufficientstatistics[j, i] - glogpartion[j])
+                (-state.logbasemeasures[i] + logpdf) *
+                (state.sufficientstatistics[j, i] - glogpartion[j])
         end
     end
 
@@ -173,8 +227,9 @@ function compute_cost(
     logpartition,
     gradlogpartition,
     inv_fisher,
-)   
-    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition + mean(state.logbasemeasures)
+)
+    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition +
+           mean(state.logbasemeasures)
 end
 
 function compute_gradient!(
