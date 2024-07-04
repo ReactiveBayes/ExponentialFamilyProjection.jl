@@ -15,7 +15,7 @@ function (objective::CVICostGradientObjective)(M::AbstractManifold, X, p)
     ef = convert(ExponentialFamilyDistribution, M, p)
 
     strategy = get_cvi_strategy(objective)
-    state = prepare_state!(strategy, objective.targetfn, ef)
+    state = prepare_state!(strategy, objective.targetfn, ef, objective.supplementary_η)
 
     logpartition = ExponentialFamily.logpartition(ef)
     gradlogpartition = ExponentialFamily.gradlogpartition(ef)

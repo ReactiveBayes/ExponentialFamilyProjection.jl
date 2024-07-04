@@ -242,6 +242,7 @@ function project_to(
         getstrategy(parameters),
         f,
         convert(ExponentialFamilyDistribution, M, initialpoint),
+        supplementary_η
     )
     strategy = with_state(getstrategy(parameters), state)
 
