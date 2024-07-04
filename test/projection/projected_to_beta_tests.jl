@@ -15,6 +15,10 @@
     @testset let distribution = Beta(10, 1)
         @test test_projection_convergence(distribution)
     end
+
+    @testset let distribution = Beta(1000, 1000)
+        @test test_projection_convergence(distribution)
+    end
 end
 
 @testitem "Project `Normal` to `Beta`" begin
@@ -23,7 +27,23 @@ end
 
     include("./projected_to_setuptests.jl")
 
-    @testset let distribution = Normal(0.5, 1)
+    @testset let distribution = Normal(0.5, 0.1)
+        @test test_projection_convergence(distribution, to = Beta)
+    end
+
+    @testset let distribution = Normal(0.5, 0.1)
+        @test test_projection_convergence(distribution, to = Beta)
+    end
+
+    @testset let distribution = Normal(0.5, 0.01)
+        @test test_projection_convergence(distribution, to = Beta)
+    end
+
+    @testset let distribution = Normal(0.5, 0.001)
+        @test test_projection_convergence(distribution, to = Beta)
+    end
+
+    @testset let distribution = Normal(0.5, 0.0001)
         @test test_projection_convergence(distribution, to = Beta)
     end
 end
@@ -34,11 +54,21 @@ end
     include("./projected_to_setuptests.jl")
 
     @testset let distribution = ProductOf(Beta(1, 1), Beta(3, 3))
-        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+        @test test_projection_convergence(
+            distribution,
+            to = Beta,
+            dims = (),
+            conditioner = nothing,
+        )
     end
 
     @testset let distribution = ProductOf(Beta(5, 1), Beta(6, 2))
-        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+        @test test_projection_convergence(
+            distribution,
+            to = Beta,
+            dims = (),
+            conditioner = nothing,
+        )
     end
 
 end
@@ -48,13 +78,22 @@ end
 
     include("./projected_to_setuptests.jl")
 
-    @testset let distribution = ProductOf(Normal(1, 1), Normal(3, 3))
-        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+    @testset let distribution = ProductOf(Normal(0.2, 0.1), Normal(0.3, 0.1))
+        @test test_projection_convergence(
+            distribution,
+            to = Beta,
+            dims = (),
+            conditioner = nothing,
+        )
     end
 
-    @testset let distribution = ProductOf(Normal(0, 1), Normal(0, 0.2))
-        @test test_projection_convergence(distribution, to = Beta, dims = (), conditioner = nothing)
+    @testset let distribution = ProductOf(Normal(0.5, 1), Normal(0.5, 0.2))
+        @test test_projection_convergence(
+            distribution,
+            to = Beta,
+            dims = (),
+            conditioner = nothing,
+        )
     end
 
 end
-

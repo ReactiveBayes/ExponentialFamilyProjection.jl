@@ -23,12 +23,6 @@ function test_projection_convergence(
 
     test1 =
         test_convergence_nsamples(distribution, targetfn, T, dims, conditioner; kwargs...)
-
-    if !test1
-        @warn "`nsamples` convergence test for $(distribution) failed."
-        return false
-    end
-
     test2 = test_convergence_niterations(
         distribution,
         targetfn,
@@ -37,11 +31,6 @@ function test_projection_convergence(
         conditioner;
         kwargs...,
     )
-
-    if !test2
-        @warn "`niterations` convergence test for $(distribution) failed."
-        return false
-    end
 
     return test1 && test2
 end
@@ -81,9 +70,11 @@ function test_convergence_nsamples(
     nsamples_niterations = _convergence_nsamples_default_niterations(distribution),
     nsamples_rng = StableRNG(42),
     nsamples_stepsize = ConstantStepsize(0.1),
+    nsamples_required_accuracy = 1e-1,
     kwargs...,
 )
-    divergence = map(nsamples_range) do nsamples
+
+    experiment = map(nsamples_range) do nsamples
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
                 nsamples = nsamples,
@@ -96,10 +87,27 @@ function test_convergence_nsamples(
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
         approximated = project_to(projection, targetfn)
-        return test_convergence_metric(approximated, distribution)
+        divergence = test_convergence_metric(approximated, distribution)
+        return divergence, approximated
     end
 
-    return test_convergence_to_stable_point(divergence)
+    divergence = map(e -> e[1], experiment)
+    approximated = map(e -> e[2], experiment)
+
+    test_required_accuracy = any(<(nsamples_required_accuracy), divergence)
+
+    if !test_required_accuracy
+        @warn "`nsamples` accuracy test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+    end
+
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`nsamples` convergence test for $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
 end
 
 _convergence_niterations_default_range(distribution) =
@@ -137,9 +145,11 @@ function test_convergence_niterations(
     niterations_nsamples = _convergence_niterations_default_nsamples(distribution),
     niterations_rng = StableRNG(42),
     niterations_stepsize = ConstantStepsize(0.1),
+    niterations_required_accuracy = 1e-1,
     kwargs...,
 )
-    divergence = map(niterations_range) do niterations
+
+    experiment = map(niterations_range) do niterations
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
                 nsamples = niterations_nsamples,
@@ -152,10 +162,27 @@ function test_convergence_niterations(
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
         approximated = project_to(projection, targetfn)
-        return test_convergence_metric(approximated, distribution)
+        divergence = test_convergence_metric(approximated, distribution)
+        return divergence, approximated
     end
 
-    return test_convergence_to_stable_point(divergence)
+    divergence = map(e -> e[1], experiment)
+    approximated = map(e -> e[2], experiment)
+
+    test_required_accuracy = any(<(niterations_required_accuracy), divergence)
+
+    if !test_required_accuracy
+        @warn "`niterations` accuracy test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+    end
+
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`niterations` convergence test for $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
 end
 
 # The metric we are using in the tests is `KL` divergence
