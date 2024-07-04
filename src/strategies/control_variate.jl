@@ -145,7 +145,7 @@ prepare_logbasemeasures_container(
     nsamples,
     supplementary_η,
 ) = Fill(
-    (1 - length(supplementary_η)) * log(basemeasure(distribution, rand(rng, distribution))),
+    (1 - length(supplementary_η)) * logbasemeasure(distribution, rand(rng, distribution)),
     nsamples,
 )
 # If the basemeasure is not constant, we allocate the memory
@@ -195,7 +195,7 @@ function prepare_state!(
         if nonconstantbasemeasure
             @inbounds state.logbasemeasures[i] =
                 one_minus_n_of_supplementary *
-                log(ExponentialFamily.basemeasure(distribution, sample))
+                ExponentialFamily.logbasemeasure(distribution, sample)
         end
 
         sufficientstatistics = __control_variate_fast_pack_parameters(
