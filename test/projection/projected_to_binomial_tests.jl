@@ -44,10 +44,18 @@ end
     include("./projected_to_setuptests.jl")
 
     @testset let distribution = Bernoulli(0.6)
-        @test_broken test_projection_convergence(distribution, to = Binomial, conditioner = 3)
+        @test test_projection_convergence(distribution, to = Binomial, conditioner = 1)
     end
 
     @testset let distribution = Bernoulli(0.3)
-        @test_broken test_projection_convergence(distribution, to = Binomial, conditioner = 3)
+        @test test_projection_convergence(distribution, to = Binomial, conditioner = 1)
+    end
+
+    @testset let distribution = Bernoulli(0.99)
+        @test test_projection_convergence(distribution, to = Binomial, conditioner = 1)
+    end
+
+    @testset let distribution = Bernoulli(0.001)
+        @test test_projection_convergence(distribution, to = Binomial, conditioner = 1)
     end
 end
