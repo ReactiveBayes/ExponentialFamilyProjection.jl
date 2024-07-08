@@ -32,6 +32,14 @@ end
         )
     end
 
+    @testset let distribution = Exponential(0.1)
+        @test_throws AssertionError test_projection_convergence(
+            distribution,
+            to = Weibull,
+            conditioner = -1.0
+        )
+    end
+
     @testset let distribution = Exponential(10.1)
         @test test_projection_convergence(
             distribution,
