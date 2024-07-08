@@ -33,6 +33,10 @@ end
     @testset let distribution = Poisson(5.3)
         @test test_projection_convergence(distribution, to = Binomial, conditioner = 20)
     end
+
+    @testset let distribution = Poisson(5.3)
+        @test_throws AssertionError test_projection_convergence(distribution, to = Binomial, conditioner = -20)
+    end
 end
 
 
@@ -45,6 +49,10 @@ end
 
     @testset let distribution = Bernoulli(0.6)
         @test test_projection_convergence(distribution, to = Binomial, conditioner = 1)
+    end
+
+    @testset let distribution = Bernoulli(0.6)
+        @test_throws AssertionError test_projection_convergence(distribution, to = Binomial, conditioner = -1)
     end
 
     @testset let distribution = Bernoulli(0.3)
