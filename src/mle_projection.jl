@@ -13,16 +13,6 @@ function grad_targetfn(M, p, data)
     return ExponentialFamilyProjection.Manopt.project(M, p, X)
 end
 
-# function grad_targetfn(M, p, data)
-#     ef = convert(ExponentialFamilyDistribution, M, p)
-#     invfisher = cholinv(Hermitian(fisherinformation(ef)))
-#     suffstats = map(sample -> sufficientstatistics(ef, sample), data)
-
-#     # X = ExponentialFamilyProjection.ExponentialFamilyManifolds.partition_point(M, invfisher*ForwardDiff.gradient((p) -> targetfn(M, p, data),p))
-#     # return ExponentialFamilyProjection.Manopt.project(M, p, X)
-# end
-
-
 function mle_projection(
     prj::ProjectedTo,
     data;
