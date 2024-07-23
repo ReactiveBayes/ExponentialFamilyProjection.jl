@@ -1,5 +1,36 @@
 using ExponentialFamily, Distributions, BayesBase, StableRNGs, RollingFunctions, Manopt
 
+function test_projection_mle(
+    distribution;
+    to = missing,
+    dims = missing,
+    conditioner = missing,
+    kwargs...,
+)
+ 
+    T =
+        ismissing(to) ?
+        ExponentialFamily.exponential_family_typetag(
+            convert(ExponentialFamilyDistribution, distribution),
+        ) : to
+    dims = ismissing(dims) ? size(rand(StableRNG(42), distribution)) : dims
+    conditioner =
+        ismissing(conditioner) ?
+        getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
+
+    test1 =
+        test_convergence_nsamples_mle(distribution, T, dims, conditioner; kwargs...)
+    test2 = test_convergence_niterations_mle(
+        distribution,
+        T,
+        dims,
+        conditioner;
+        kwargs...,
+    )
+
+    return test1 && test2
+end
+
 function test_projection_convergence(
     distribution;
     to = missing,
@@ -185,6 +216,114 @@ function test_convergence_niterations(
     return test_required_accuracy && test_convergence
 end
 
+
+function test_convergence_niterations_mle(
+    distribution,
+    T,
+    dims,
+    conditioner;
+    niterations_range = _convergence_niterations_default_range(distribution),
+    niterations_tolerance = _convergence_niterations_default_tolerance(distribution),
+    niterations_nsamples = _convergence_niterations_default_nsamples(distribution),
+    niterations_rng = StableRNG(42),
+    niterations_stepsize = ConstantStepsize(0.1),
+    niterations_required_accuracy = 1e-1,
+    number_data_points = 1000,
+    kwargs...,
+)
+    data = rand(niterations_rng, distribution, number_data_points)
+    experiment = map(niterations_range) do niterations
+        parameters = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(
+                nsamples = niterations_nsamples,
+                seed = rand(niterations_rng, UInt),
+            ),
+            niterations = niterations,
+            tolerance = niterations_tolerance,
+            stepsize = niterations_stepsize,
+        )
+        projection =
+            ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
+        approximated = mle_projection(projection, data)
+        divergence = test_convergence_metric(approximated, distribution)
+        return divergence, approximated
+    end
+
+    divergence = map(e -> e[1], experiment)
+    approximated = map(e -> e[2], experiment)
+
+    test_required_accuracy = any(<(niterations_required_accuracy), divergence)
+
+    if !test_required_accuracy
+        @warn "`niterations` accuracy test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+    end
+
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`niterations` convergence test for $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
+end
+
+
+function test_convergence_nsamples_mle(
+    distribution,
+    T,
+    dims,
+    conditioner;
+    nsamples_range = _convergence_nsamples_default_range(distribution),
+    nsamples_tolerance = _convergence_nsamples_default_tolerance(distribution),
+    nsamples_niterations = _convergence_nsamples_default_niterations(distribution),
+    nsamples_rng = StableRNG(42),
+    nsamples_stepsize = ConstantStepsize(0.1),
+    nsamples_required_accuracy = 1e-1,
+    number_data_points = 1000,
+    kwargs...,
+)
+    
+    data = rand(nsamples_rng, distribution, number_data_points)
+    experiment = map(nsamples_range) do nsamples
+        parameters = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(
+                nsamples = nsamples,
+                seed = rand(nsamples_rng, UInt),
+            ),
+            niterations = nsamples_niterations,
+            tolerance = nsamples_tolerance,
+            stepsize = nsamples_stepsize,
+        )
+        
+        projection =
+            ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
+        approximated = mle_projection(projection, data)
+        divergence = test_convergence_metric(approximated, distribution)
+        return divergence, approximated
+    end
+
+    divergence = map(e -> e[1], experiment)
+    approximated = map(e -> e[2], experiment)
+
+    test_required_accuracy = any(<(nsamples_required_accuracy), divergence)
+
+    if !test_required_accuracy
+        @warn "`nsamples` accuracy test for `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+    end
+
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`nsamples` convergence test for $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
+end
+
+
+
 # The metric we are using in the tests is `KL` divergence
 function test_convergence_metric(left, right)
     return kldivergence(left, right)
@@ -239,3 +378,4 @@ function test_convergence_to_stable_point(
 
     return true
 end
+

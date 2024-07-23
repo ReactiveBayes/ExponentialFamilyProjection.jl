@@ -67,3 +67,24 @@ end
         @test test_projection_convergence(distribution, to = Binomial, conditioner = 1)
     end
 end
+
+@testitem "MLE" begin
+    using BayesBase, ExponentialFamily, Distributions, JET
+    using ExponentialFamilyProjection
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = Binomial(10, 0.5)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Binomial(20, 0.1)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Binomial(2, 0.9) 
+        @test test_projection_mle(distribution)
+    end
+
+
+end

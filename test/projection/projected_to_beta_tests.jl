@@ -97,3 +97,27 @@ end
     end
 
 end
+
+
+@testitem "MLE" begin
+    using BayesBase, ExponentialFamily, Distributions, JET
+    using ExponentialFamilyProjection
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = Beta(1, 1)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Beta(1, 10)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Beta(10, 1)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Beta(1000, 1000)
+        @test test_projection_mle(distribution)
+    end
+end
