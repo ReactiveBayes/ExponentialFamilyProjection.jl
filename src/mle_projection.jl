@@ -13,6 +13,31 @@ function grad_targetfn(M, p, data)
     return ExponentialFamilyProjection.Manopt.project(M, p, X)
 end
 
+
+"""
+    mle_projection(prj::ProjectedTo, data; initialpoint = nothing, kwargs...)
+
+Finds the closest exponential family distribution specified by `prj` that is fitted to `data` by maximum likelihood.
+
+# Arguments
+- `to::ProjectedTo`: Configuration for the projection. Refer to `ProjectedTo` for detailed information.
+- `data`: Set of samples to fit an exponential family distribution.
+- `initialpoint`: Starting point for the optimization process (optional).
+- `kwargs...`: Additional arguments passed to `Manopt.gradient_descent!` (optional). For details on `gradient_descent!` parameters, see the [Manopt.jl documentation](https://manoptjl.org/stable/solvers/gradient_descent/#Manopt.gradient_descent).
+
+```jldoctest
+julia> using ExponentialFamily, BayesBase
+
+julia> data = rand(Beta(4,3), 1000);
+
+julia> prj = ProjectedTo(Beta; parameters = ProjectionParameters(niterations = 500))
+ProjectedTo(Beta)
+
+julia> project_to(prj, data) isa ExponentialFamily.Beta
+true
+```
+"""
+
 function mle_projection(
     prj::ProjectedTo,
     data;

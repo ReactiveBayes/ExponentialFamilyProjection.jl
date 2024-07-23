@@ -33,6 +33,14 @@ The projection is performed by calling the `project_to` function with the specif
 ExponentialFamilyProjection.project_to
 ```
 
+## MLE by projection
+
+MLE is performed by calling the `mle_projection` function with the specified [`ExponentialFamilyProjection.ProjectedTo`](@ref) on a set of data points:
+
+```@docs 
+ExponentialFamilyProjection.mle_projection
+```
+
 ## [Optimization strategies](@id opt-strategies)
 
 The optimization procedure requires computing the expectation of the gradient to perform gradient descent in the natural parameters space. Currently, the library provides one strategy for computing these expectations:
