@@ -60,3 +60,30 @@ end
         )
     end
 end
+
+@testitem "MLE" begin
+    using BayesBase, ExponentialFamily, Distributions, JET
+    using ExponentialFamilyProjection
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = Rayleigh(1.0)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Rayleigh(10.0)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Rayleigh(0.5)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Rayleigh(20.7)
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Rayleigh(100.26)
+        @test test_projection_mle(distribution)
+    end
+end

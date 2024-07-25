@@ -5,11 +5,15 @@ import BayesBase: InplaceLogpdf
 """
     ControlVariateStrategy(; kwargs...)
 
-A strategy for gradient descent optimization and gradients computations.
+A strategy for gradient descent optimization and gradients computations that resembles the REINFORCE gradient estimator.
+
 The following parameters are available:
 * `nsamples = 2000`: The number of samples to use for estimates
 * `seed = 42`: The seed for the random number generator
 * `rng = StableRNG(seed)`: The random number generator
+
+!!! note
+    This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
 Base.@kwdef struct ControlVariateStrategy{S,D,N,T}
     nsamples::S = 2000
@@ -43,16 +47,23 @@ function with_state(strategy::ControlVariateStrategy, state)
     )
 end
 
+preprocess_strategy_argument(strategy::ControlVariateStrategy, argument::Any) = strategy
+preprocess_strategy_argument(::ControlVariateStrategy, argument::AbstractArray) = error(
+    lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(argument))` instead.",
+)
+
 function prepare_state!(
+    M::AbstractManifold,
     strategy::ControlVariateStrategy,
-    targetfn::F,
+    projection_argument::F,
     distribution,
     supplementary_η,
 ) where {F}
     return prepare_state!(
+        M,
         getstate(strategy),
         strategy,
-        convert(InplaceLogpdf, targetfn),
+        convert(InplaceLogpdf, projection_argument),
         distribution,
         supplementary_η,
     )
@@ -81,9 +92,10 @@ getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientst
 getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
 
 function prepare_state!(
+    M::AbstractManifold,
     ::Nothing,
     strategy::ControlVariateStrategy,
-    targetfn::InplaceLogpdf,
+    projection_argument::InplaceLogpdf,
     distribution,
     supplementary_η,
 )
@@ -109,7 +121,14 @@ function prepare_state!(
         gradsamples = gradsamples,
     )
 
-    return prepare_state!(state, strategy, targetfn, distribution, supplementary_η)
+    return prepare_state!(
+        M,
+        state,
+        strategy,
+        projection_argument,
+        distribution,
+        supplementary_η,
+    )
 end
 
 # The following functions are used to prepare the containers for the samples, logpdfs, etc.
@@ -158,9 +177,10 @@ prepare_logbasemeasures_container(
 ) = zeros(paramfloattype(distribution), nsamples)
 
 function prepare_state!(
+    M::AbstractManifold,
     state::ControlVariateStrategyState,
     strategy::ControlVariateStrategy,
-    targetfn::InplaceLogpdf,
+    projection_argument::InplaceLogpdf,
     distribution,
     supplementary_η,
 )
@@ -171,18 +191,12 @@ function prepare_state!(
     Random.seed!(getrng(strategy), getseed(strategy))
     Random.rand!(getrng(strategy), distribution, state.samples)
 
-    _, sample_container = ExponentialFamily.check_logpdf(
-        ExponentialFamily.variate_form(typeof(distribution)),
-        typeof(state.samples),
-        eltype(state.samples),
-        distribution,
-        state.samples,
-    )
+    _, sample_container = ExponentialFamily.check_logpdf(distribution, state.samples)
 
     glogpartion = ExponentialFamily.gradlogpartition(distribution)
     J = size(state.gradsamples, 1)
 
-    targetfn(state.logpdfs, sample_container)
+    projection_argument(state.logpdfs, sample_container)
 
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
 
@@ -198,7 +212,7 @@ function prepare_state!(
                 ExponentialFamily.logbasemeasure(distribution, sample)
         end
 
-        sufficientstatistics = __control_variate_fast_pack_parameters(
+        sufficientstatistics = __projection_fast_pack_parameters(
             ExponentialFamily.sufficientstatistics(distribution, sample),
         )
 
@@ -214,12 +228,8 @@ function prepare_state!(
     return state
 end
 
-# This can go to the ExponentialFamily.jl, very useful
-# The idea here is that it is not necessary to pack a tuple of numbers into a vector
-__control_variate_fast_pack_parameters(t::NTuple{N,<:Number}) where {N} = t
-__control_variate_fast_pack_parameters(t) = ExponentialFamily.pack_parameters(t)
-
 function compute_cost(
+    M::AbstractManifold,
     obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
@@ -233,6 +243,7 @@ function compute_cost(
 end
 
 function compute_gradient!(
+    M::AbstractManifold,
     obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,

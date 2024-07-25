@@ -1,12 +1,12 @@
 
 struct CVICostGradientObjective{F,P,S,B}
-    targetfn::F
+    projection_argument::F
     supplementary_η::P
     strategy::S
     buffer::B
 end
 
-get_cvi_targetfn(obj::CVICostGradientObjective) = obj.targetfn
+get_cvi_projection_argument(obj::CVICostGradientObjective) = obj.projection_argument
 get_cvi_supplementary_η(obj::CVICostGradientObjective) = obj.supplementary_η
 get_cvi_strategy(obj::CVICostGradientObjective) = obj.strategy
 get_cvi_buffer(obj::CVICostGradientObjective) = obj.buffer
@@ -15,7 +15,13 @@ function (objective::CVICostGradientObjective)(M::AbstractManifold, X, p)
     ef = convert(ExponentialFamilyDistribution, M, p)
 
     strategy = get_cvi_strategy(objective)
-    state = prepare_state!(strategy, objective.targetfn, ef, objective.supplementary_η)
+    state = prepare_state!(
+        M,
+        strategy,
+        objective.projection_argument,
+        ef,
+        objective.supplementary_η,
+    )
 
     logpartition = ExponentialFamily.logpartition(ef)
     gradlogpartition = ExponentialFamily.gradlogpartition(ef)
@@ -30,6 +36,7 @@ function (objective::CVICostGradientObjective)(M::AbstractManifold, X, p)
     end
 
     c = compute_cost(
+        M,
         objective,
         strategy,
         state,
@@ -39,6 +46,7 @@ function (objective::CVICostGradientObjective)(M::AbstractManifold, X, p)
         inv_fisher,
     )
     X = compute_gradient!(
+        M,
         objective,
         strategy,
         state,
