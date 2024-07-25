@@ -5,11 +5,15 @@ import BayesBase: InplaceLogpdf
 """
     ControlVariateStrategy(; kwargs...)
 
-A strategy for gradient descent optimization and gradients computations.
+A strategy for gradient descent optimization and gradients computations that resembles the REINFORCE gradient estimator.
+
 The following parameters are available:
 * `nsamples = 2000`: The number of samples to use for estimates
 * `seed = 42`: The seed for the random number generator
 * `rng = StableRNG(seed)`: The random number generator
+
+!!! note
+    This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
 Base.@kwdef struct ControlVariateStrategy{S,D,N,T}
     nsamples::S = 2000

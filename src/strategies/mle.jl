@@ -1,5 +1,17 @@
 using ForwardDiff, LoopVectorization
 
+"""
+    MLEStrategy(; kwargs...)
+
+A strategy for gradient descent optimization and gradients computations that resembles MLE estimation.
+
+The following parameters are available:
+* `seed = 42`: The seed for the random number generator
+* `rng = StableRNG(seed)`: The random number generator 
+
+!!! note
+    This strategy requires a collection of samples as an argument for `project_to` and cannot project a function. Use `ControlVariateStrategy` to project a function.
+"""
 Base.@kwdef struct MLEStrategy{D,N,T}
     seed::D = 42
     rng::N = StableRNG(seed)
