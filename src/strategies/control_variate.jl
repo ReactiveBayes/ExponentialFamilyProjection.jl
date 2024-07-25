@@ -51,7 +51,7 @@ function prepare_state!(
 ) where {F}
     if isa(projection_argument, AbstractArray)
         error(
-            "The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`)",
+            lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(projection_argument))` instead.",
         )
     end
     return prepare_state!(

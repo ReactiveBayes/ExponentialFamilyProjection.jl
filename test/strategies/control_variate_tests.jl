@@ -328,3 +328,20 @@ end
         end
     end
 end
+
+@testitem "`ControlVariateStrategy` should fail if given a list of samples instead of a function" begin
+    using ExponentialFamily
+
+    prj = ProjectedTo(
+        Beta;
+        parameters = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(),
+        ),
+    )
+
+    @test_throws "The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`)." project_to(
+        prj,
+        [0.5],
+    )
+
+end

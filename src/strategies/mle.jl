@@ -29,7 +29,9 @@ function prepare_state!(
     supplementary_η,
 ) where {S}
     if !isa(projection_argument, AbstractArray)
-        error("`MLEStrategy` requires the projection argument to be an array of samples.")
+        error(
+            lazy"`MLEStrategy` requires the projection argument to be an array of samples. Got `$(typeof(projection_argument))` instead.",
+        )
     end
     return prepare_state!(
         getstate(strategy),
