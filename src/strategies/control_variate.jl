@@ -44,6 +44,7 @@ function with_state(strategy::ControlVariateStrategy, state)
 end
 
 function prepare_state!(
+    M::AbstractManifold,
     strategy::ControlVariateStrategy,
     projection_argument::F,
     distribution,
@@ -55,6 +56,7 @@ function prepare_state!(
         )
     end
     return prepare_state!(
+        M,
         getstate(strategy),
         strategy,
         convert(InplaceLogpdf, projection_argument),
@@ -86,6 +88,7 @@ getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientst
 getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
 
 function prepare_state!(
+    M::AbstractManifold,
     ::Nothing,
     strategy::ControlVariateStrategy,
     projection_argument::InplaceLogpdf,
@@ -115,6 +118,7 @@ function prepare_state!(
     )
 
     return prepare_state!(
+        M,
         state,
         strategy,
         projection_argument,
@@ -169,6 +173,7 @@ prepare_logbasemeasures_container(
 ) = zeros(paramfloattype(distribution), nsamples)
 
 function prepare_state!(
+    M::AbstractManifold,
     state::ControlVariateStrategyState,
     strategy::ControlVariateStrategy,
     projection_argument::InplaceLogpdf,
@@ -231,6 +236,7 @@ __control_variate_fast_pack_parameters(t::NTuple{N,<:Number}) where {N} = t
 __control_variate_fast_pack_parameters(t) = ExponentialFamily.pack_parameters(t)
 
 function compute_cost(
+    M::AbstractManifold,
     obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
@@ -244,6 +250,7 @@ function compute_cost(
 end
 
 function compute_gradient!(
+    M::AbstractManifold,
     obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,

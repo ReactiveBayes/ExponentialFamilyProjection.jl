@@ -1,4 +1,4 @@
-using ForwardDiff
+using ForwardDiff, LoopVectorization
 
 Base.@kwdef struct MLEStrategy{D,N,T}
     seed::D = 42
@@ -23,6 +23,7 @@ function with_state(strategy::MLEStrategy, state)
 end
 
 function prepare_state!(
+    M::AbstractManifold,
     strategy::MLEStrategy,
     projection_argument::S,
     distribution,
@@ -34,6 +35,7 @@ function prepare_state!(
         )
     end
     return prepare_state!(
+        M,
         getstate(strategy),
         strategy,
         projection_argument,
@@ -42,43 +44,62 @@ function prepare_state!(
     )
 end
 
-Base.@kwdef struct MLEStrategyState{S,G}
-    samples::S
+Base.@kwdef struct MLEStrategyState{F,C,G}
+    targetfn::F
+    config::C
     tmpgrad::G
 end
 
 function Base.:(==)(a::MLEStrategyState, b::MLEStrategyState)::Bool
-    return a.samples == b.samples && a.tmpgrad == b.tmpgrad
+    return a.targetfn == b.targetgn && a.config == b.config && a.tmpgrad == b.tmpgrad
 end
 
-getsamples(state::MLEStrategyState) = state.samples
+gettargetfn(state::MLEStrategyState) = state.targetfn
+getconfig(state::MLEStrategyState) = state.config
 gettmpgrad(state::MLEStrategyState) = state.tmpgrad
 
 function prepare_state!(
+    M::AbstractManifold,
     ::Nothing,
     strategy::MLEStrategy,
     samples,
     distribution,
     supplementary_η,
 )
-    tmpgrad = similar(getnaturalparameters(distribution))
-    return MLEStrategyState(samples, tmpgrad)
+    targetfn = MLETargetFn(M, samples)
+    config = ForwardDiff.GradientConfig(targetfn, getnaturalparameters(distribution))
+    tmpgrad = ForwardDiff.gradient(targetfn, getnaturalparameters(distribution), config)
+    return MLEStrategyState(targetfn, config, tmpgrad)
 end
 
 function prepare_state!(
+    M::AbstractManifold,
     state::MLEStrategyState,
     strategy::MLEStrategy,
     samples,
     distribution,
     supplementary_η,
 )
-    if getsamples(state) != samples
-        @warn "`MLEStrategyState` has a different set of samples. The projection algorithm may produce wrong results."
-    end
     return state
 end
 
+struct MLETargetFn{M,S}
+    manifold::M
+    samples::S
+end
+
+function (fn::MLETargetFn)(η)
+    ef = convert(ExponentialFamilyDistribution, fn.manifold, η)
+    _, container = ExponentialFamily.check_logpdf(ef, fn.samples)
+    _logpartition = logpartition(ef)
+    return -mean(
+        x -> ExponentialFamily._plogpdf(ef, x, _logpartition, logbasemeasure(ef, x)),
+        container,
+    )
+end
+
 function compute_cost(
+    M::AbstractManifold,
     obj::CVICostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
@@ -87,16 +108,11 @@ function compute_cost(
     _,
     _,
 )
-    ef = convert(ExponentialFamilyDistribution, get_cvi_manifold(obj), η)
-    _, container = ExponentialFamily.check_logpdf(ef, getsamples(state))
-    _logpartition = logpartition(ef)
-    return -mean(
-        x -> ExponentialFamily._plogpdf(ef, x, _logpartition, logbasemeasure(ef, x)),
-        container,
-    )
+    return gettargetfn(state)(η)
 end
 
 function compute_gradient!(
+    M::AbstractManifold,
     obj::CVICostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
@@ -106,9 +122,7 @@ function compute_gradient!(
     _,
     inv_fisher,
 )
-    f = (η) -> compute_cost(obj, strategy, state, η, nothing, nothing, nothing)
-    G = ForwardDiff.gradient!(gettmpgrad(state), f, η)
+    G = ForwardDiff.gradient!(gettmpgrad(state), gettargetfn(state), η, getconfig(state))
     X = mul!(X, inv_fisher, G)
-
     return X
 end

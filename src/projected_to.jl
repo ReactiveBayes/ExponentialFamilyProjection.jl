@@ -239,6 +239,7 @@ function project_to(
     initialpoint = preprocess_initialpoint(initialpoint, M, parameters)
 
     state = prepare_state!(
+        M,
         getstrategy(parameters),
         projection_argument,
         convert(ExponentialFamilyDistribution, M, initialpoint),
@@ -279,10 +280,11 @@ function _kernel_project_to(
     kwargs,
 ) where {T}
     g_grad_g! =
-        CVICostGradientObjective(M, projection_argument, supplementary_η, strategy, buffer)
+        CVICostGradientObjective(projection_argument, supplementary_η, strategy, buffer)
     objective = ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 
-    q = gradient_descent!(
+    q = initialpoint # `gradient_descent!` overrides `q`
+    gradient_descent!(
         M,
         objective,
         initialpoint;
