@@ -210,7 +210,7 @@ true
 """
 function project_to(
     prj::ProjectedTo,
-    f::F,
+    projection_argument::F,
     supplementary...;
     initialpoint = nothing,
     kwargs...,
@@ -240,9 +240,9 @@ function project_to(
 
     state = prepare_state!(
         getstrategy(parameters),
-        f,
+        projection_argument,
         convert(ExponentialFamilyDistribution, M, initialpoint),
-        supplementary_η
+        supplementary_η,
     )
     strategy = with_state(getstrategy(parameters), state)
 
@@ -251,26 +251,48 @@ function project_to(
     kwargs = !haskey(kwargs, :debug) ? (; kwargs..., debug = missing) : kwargs
 
     return with_buffer(parameters) do buffer
-
-        g_grad_g! = CVICostGradientObjective(f, supplementary_η, strategy, buffer)
-        objective =
-            ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
-
-        q = gradient_descent!(
-            M,
-            objective,
-            initialpoint;
-            stopping_criterion = get_stopping_criterion(parameters),
-            stepsize = getstepsize(parameters),
-            direction = BoundedNormUpdateRule(static(1)),
-            kwargs...,
-        )
-
-        return convert(
+        return _kernel_project_to(
             get_projected_to_type(prj),
-            convert(ExponentialFamilyDistribution, M, q),
+            M,
+            projection_argument,
+            supplementary_η,
+            strategy,
+            buffer,
+            parameters,
+            initialpoint,
+            kwargs,
         )
     end
+end
+
+# see https://docs.julialang.org/en/v1/manual/performance-tips/#kernel-functions
+# before this function call the argument may not be type-stable, inside these should be inferred properly
+function _kernel_project_to(
+    ::Type{T},
+    M,
+    projection_argument,
+    supplementary_η,
+    strategy,
+    buffer,
+    parameters,
+    initialpoint,
+    kwargs,
+) where {T}
+    g_grad_g! =
+        CVICostGradientObjective(M, projection_argument, supplementary_η, strategy, buffer)
+    objective = ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
+
+    q = gradient_descent!(
+        M,
+        objective,
+        initialpoint;
+        stopping_criterion = get_stopping_criterion(parameters),
+        stepsize = getstepsize(parameters),
+        direction = BoundedNormUpdateRule(static(1)),
+        kwargs...,
+    )
+
+    return convert(T, convert(ExponentialFamilyDistribution, M, q))
 end
 
 # This function preprocess the initial point for the projection

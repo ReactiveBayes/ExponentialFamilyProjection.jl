@@ -45,14 +45,19 @@ end
 
 function prepare_state!(
     strategy::ControlVariateStrategy,
-    targetfn::F,
+    projection_argument::F,
     distribution,
     supplementary_η,
 ) where {F}
+    if isa(projection_argument, AbstractArray)
+        error(
+            "The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`)",
+        )
+    end
     return prepare_state!(
         getstate(strategy),
         strategy,
-        convert(InplaceLogpdf, targetfn),
+        convert(InplaceLogpdf, projection_argument),
         distribution,
         supplementary_η,
     )
@@ -83,7 +88,7 @@ getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
 function prepare_state!(
     ::Nothing,
     strategy::ControlVariateStrategy,
-    targetfn::InplaceLogpdf,
+    projection_argument::InplaceLogpdf,
     distribution,
     supplementary_η,
 )
@@ -109,7 +114,13 @@ function prepare_state!(
         gradsamples = gradsamples,
     )
 
-    return prepare_state!(state, strategy, targetfn, distribution, supplementary_η)
+    return prepare_state!(
+        state,
+        strategy,
+        projection_argument,
+        distribution,
+        supplementary_η,
+    )
 end
 
 # The following functions are used to prepare the containers for the samples, logpdfs, etc.
@@ -160,7 +171,7 @@ prepare_logbasemeasures_container(
 function prepare_state!(
     state::ControlVariateStrategyState,
     strategy::ControlVariateStrategy,
-    targetfn::InplaceLogpdf,
+    projection_argument::InplaceLogpdf,
     distribution,
     supplementary_η,
 )
@@ -182,7 +193,7 @@ function prepare_state!(
     glogpartion = ExponentialFamily.gradlogpartition(distribution)
     J = size(state.gradsamples, 1)
 
-    targetfn(state.logpdfs, sample_container)
+    projection_argument(state.logpdfs, sample_container)
 
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
 
