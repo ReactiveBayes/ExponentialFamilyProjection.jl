@@ -187,13 +187,7 @@ function prepare_state!(
     Random.seed!(getrng(strategy), getseed(strategy))
     Random.rand!(getrng(strategy), distribution, state.samples)
 
-    _, sample_container = ExponentialFamily.check_logpdf(
-        ExponentialFamily.variate_form(typeof(distribution)),
-        typeof(state.samples),
-        eltype(state.samples),
-        distribution,
-        state.samples,
-    )
+    _, sample_container = ExponentialFamily.check_logpdf(distribution, state.samples)
 
     glogpartion = ExponentialFamily.gradlogpartition(distribution)
     J = size(state.gradsamples, 1)
@@ -214,7 +208,7 @@ function prepare_state!(
                 ExponentialFamily.logbasemeasure(distribution, sample)
         end
 
-        sufficientstatistics = __control_variate_fast_pack_parameters(
+        sufficientstatistics = __projection_fast_pack_parameters(
             ExponentialFamily.sufficientstatistics(distribution, sample),
         )
 
@@ -229,11 +223,6 @@ function prepare_state!(
 
     return state
 end
-
-# This can go to the ExponentialFamily.jl, very useful
-# The idea here is that it is not necessary to pack a tuple of numbers into a vector
-__control_variate_fast_pack_parameters(t::NTuple{N,<:Number}) where {N} = t
-__control_variate_fast_pack_parameters(t) = ExponentialFamily.pack_parameters(t)
 
 function compute_cost(
     M::AbstractManifold,

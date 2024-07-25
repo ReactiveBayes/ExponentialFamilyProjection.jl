@@ -66,7 +66,27 @@ function prepare_state!(
     distribution,
     supplementary_η,
 )
-    targetfn = MLETargetFn(M, samples)
+    _, sample_container = ExponentialFamily.check_logpdf(distribution, samples)
+
+    # Our samples are fixed, thus we can precompute all the `sufficientstatistics` once
+    sufficientstatistics = zeros(
+        paramfloattype(distribution),
+        length(getnaturalparameters(distribution)),
+        length(samples),
+    )
+
+    J = size(sufficientstatistics, 1)
+
+    foreach(enumerate(sample_container)) do (i, sample)
+        sample_sufficientstatistics = __projection_fast_pack_parameters(
+            ExponentialFamily.sufficientstatistics(distribution, sample),
+        )
+        @turbo warn_check_args = false for j = 1:J
+            @inbounds sufficientstatistics[j, i] = sample_sufficientstatistics[j]
+        end
+    end
+
+    targetfn = MLETargetFn(M, samples, sufficientstatistics)
     config = ForwardDiff.GradientConfig(targetfn, getnaturalparameters(distribution))
     tmpgrad = ForwardDiff.gradient(targetfn, getnaturalparameters(distribution), config)
     return MLEStrategyState(targetfn, config, tmpgrad)
@@ -83,19 +103,27 @@ function prepare_state!(
     return state
 end
 
-struct MLETargetFn{M,S}
+struct MLETargetFn{M,S,C}
     manifold::M
     samples::S
+    sufficientstatistics::C
 end
 
 function (fn::MLETargetFn)(η)
+    # This function essentially computes the negative average of `logpdf` of all provided `samples`
+    # with the distribution defined in `η`
     ef = convert(ExponentialFamilyDistribution, fn.manifold, η)
-    _, container = ExponentialFamily.check_logpdf(ef, fn.samples)
+    _, samples_container = ExponentialFamily.check_logpdf(ef, fn.samples)
+    # We use precomputed `sufficientstatistics` since in this strategy the `samples` are fixed
+    sufficientstatistics_container = eachcol(fn.sufficientstatistics)
     _logpartition = logpartition(ef)
     return -mean(
-        x -> ExponentialFamily._plogpdf(ef, x, _logpartition, logbasemeasure(ef, x)),
-        container,
-    )
+        zip(samples_container, sufficientstatistics_container),
+    ) do (sample, sufficientstatistics)
+        _logbasemeasure = logbasemeasure(ef, sample)
+        # This is the definition of `logpdf` for exponential family members
+        return _logbasemeasure + dot(η, sufficientstatistics) - _logpartition
+    end
 end
 
 function compute_cost(
