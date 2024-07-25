@@ -33,3 +33,30 @@ end
         @test test_projection_convergence(distribution, to = Categorical, dims = (), conditioner = 3)
     end
 end
+
+
+
+@testitem "MLE" begin
+    using BayesBase, ExponentialFamily, Distributions, JET
+    using ExponentialFamilyProjection
+
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = Categorical([1/3, 1/3, 1/3])
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Categorical([1/4, 1/2, 1/4])
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Categorical([1/16, 1/2, 1/4, 3/16])
+        @test test_projection_mle(distribution)
+    end
+
+    @testset let distribution = Categorical([1/12, 1/3, 1/12, 1/6, 1/3])
+        @test test_projection_mle(distribution)
+    end
+
+ 
+end
