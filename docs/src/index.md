@@ -27,26 +27,24 @@ ExponentialFamilyProjection.ProjectedTo
 
 ## Projection 
 
-The projection is performed by calling the `project_to` function with the specified [`ExponentialFamilyProjection.ProjectedTo`](@ref) and log probability density function:
+The projection is performed by calling the `project_to` function with the specified [`ExponentialFamilyProjection.ProjectedTo`](@ref) and log probability density function or a set of data point as the second argument.
 
 ```@docs 
 ExponentialFamilyProjection.project_to
 ```
 
-## MLE by projection
-
-MLE is performed by calling the `mle_projection` function with the specified [`ExponentialFamilyProjection.ProjectedTo`](@ref) on a set of data points:
-
-```@docs 
-ExponentialFamilyProjection.mle_projection
-```
+!!! note
+    Different strategies are compatible with different types of arguments. Read [Optimization strategies](@ref opt-strategies) section for more information.
 
 ## [Optimization strategies](@id opt-strategies)
 
-The optimization procedure requires computing the expectation of the gradient to perform gradient descent in the natural parameters space. Currently, the library provides one strategy for computing these expectations:
+The optimization procedure requires computing the expectation of the gradient to perform gradient descent in the natural parameters space. Currently, the library provides the following strategies for computing these expectations:
 
 ```@docs
+ExponentialFamilyProjection.DefaultStrategy
 ExponentialFamilyProjection.ControlVariateStrategy
+ExponentialFamilyProjection.MLEStrategy
+ExponentialFamilyProjection.preprocess_strategy_argument
 ```
 
 For high-dimensional distributions, adjusting the default number of samples might be necessary to achieve better performance.
@@ -132,6 +130,27 @@ result #hide
 ```
 
 As in previous examples the result is pretty close to the actual `hiddengaussian` used to define the `targetf`. 
+
+### Projection with samples
+
+The projection can be done given a set of samples instead of the function directly. For example, let's project an set of samples onto a Beta distribution:
+
+```@example projection
+using StableRNGs
+
+hiddenbeta = Beta(10, 3)
+samples = rand(StableRNG(42), hiddenbeta, 1_000)
+prj = ProjectedTo(Beta)
+result = project_to(prj, samples)
+@test kldivergence(result, hiddenbeta) < 1e-2 #hide
+result #hide
+```
+
+```@example projection
+plot(0.0:0.01:1.0, x -> pdf(hiddenbeta, x), label="real distribution", fill = 0, fillalpha = 0.2)
+histogram!(samples, label = "samples", normalize = :pdf, fillalpha = 0.2)
+plot!(0.0:0.01:1.0, x -> pdf(result, x), label="estimated projection", fill = 0, fillalpha = 0.2)
+```
 
 ## Manopt extensions
 

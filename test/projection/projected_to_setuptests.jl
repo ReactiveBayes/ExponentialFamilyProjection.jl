@@ -7,7 +7,7 @@ function test_projection_mle(
     conditioner = missing,
     kwargs...,
 )
- 
+
     T =
         ismissing(to) ?
         ExponentialFamily.exponential_family_typetag(
@@ -18,15 +18,8 @@ function test_projection_mle(
         ismissing(conditioner) ?
         getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
 
-    test1 =
-        test_convergence_nsamples_mle(distribution, T, dims, conditioner; kwargs...)
-    test2 = test_convergence_niterations_mle(
-        distribution,
-        T,
-        dims,
-        conditioner;
-        kwargs...,
-    )
+    test1 = test_convergence_nsamples_mle(distribution, T, dims, conditioner; kwargs...)
+    test2 = test_convergence_niterations_mle(distribution, T, dims, conditioner; kwargs...)
 
     return test1 && test2
 end
@@ -228,14 +221,12 @@ function test_convergence_niterations_mle(
     niterations_rng = StableRNG(42),
     niterations_stepsize = ConstantStepsize(0.1),
     niterations_required_accuracy = 1e-1,
-    number_data_points = 1000,
     kwargs...,
 )
-    data = rand(niterations_rng, distribution, number_data_points)
     experiment = map(niterations_range) do niterations
+        data = rand(niterations_rng, distribution, niterations_nsamples)
         parameters = ProjectionParameters(
-            strategy = ExponentialFamilyProjection.ControlVariateStrategy(
-                nsamples = niterations_nsamples,
+            strategy = ExponentialFamilyProjection.MLEStrategy(
                 seed = rand(niterations_rng, UInt),
             ),
             niterations = niterations,
@@ -244,7 +235,7 @@ function test_convergence_niterations_mle(
         )
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
-        approximated = mle_projection(projection, data)
+        approximated = project_to(projection, data)
         divergence = test_convergence_metric(approximated, distribution)
         return divergence, approximated
     end
@@ -280,25 +271,22 @@ function test_convergence_nsamples_mle(
     nsamples_rng = StableRNG(42),
     nsamples_stepsize = ConstantStepsize(0.1),
     nsamples_required_accuracy = 1e-1,
-    number_data_points = 1000,
     kwargs...,
 )
-    
-    data = rand(nsamples_rng, distribution, number_data_points)
     experiment = map(nsamples_range) do nsamples
+        data = rand(nsamples_rng, distribution, nsamples)
         parameters = ProjectionParameters(
-            strategy = ExponentialFamilyProjection.ControlVariateStrategy(
-                nsamples = nsamples,
+            strategy = ExponentialFamilyProjection.MLEStrategy(
                 seed = rand(nsamples_rng, UInt),
             ),
             niterations = nsamples_niterations,
             tolerance = nsamples_tolerance,
             stepsize = nsamples_stepsize,
         )
-        
+
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
-        approximated = mle_projection(projection, data)
+        approximated = project_to(projection, data)
         divergence = test_convergence_metric(approximated, distribution)
         return divergence, approximated
     end
