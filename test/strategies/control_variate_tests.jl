@@ -1,5 +1,6 @@
 @testitem "ControlVariateStrategy generic properties" begin
-    using Random, Bumper, LinearAlgebra, Distributions, ExponentialFamily
+    using Random,
+        Bumper, LinearAlgebra, Distributions, ExponentialFamily, ExponentialFamilyManifolds
     import ExponentialFamilyProjection:
         ControlVariateStrategy,
         getnsamples,
@@ -58,30 +59,40 @@
         distributions = [Beta(5, 5), Chisq(10)]
         for dist in distributions
             ef = convert(ExponentialFamilyDistribution, Beta(5, 5))
-            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, ())
-            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, ())
+            T = ExponentialFamily.exponential_family_typetag(ef)
+            d = size(mean(ef))
+            c = getconditioner(ef)
+            M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, ())
+            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, ())
             @test state1 == state2
             @test ControlVariateStrategy(state = state1) ==
                   ControlVariateStrategy(state = state2)
 
-            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef,))
-            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef,))
+            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef,))
+            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef,))
 
             @test state1 == state2
 
-            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
-            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
+            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
+            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
             @test state1 == state2
 
-            state1 = prepare_state!(ControlVariateStrategy(), (x) -> 1, ef, ())
-            state2 = prepare_state!(ControlVariateStrategy(), (x) -> 2, ef, ())
+            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, ())
+            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 2, ef, ())
             @test state1 != state2
         end
     end
 end
 
 @testitem "ControlVariateStrategy prepare state" begin
-    using JET, ExponentialFamily, Distributions, BayesBase, LinearAlgebra, StableRNGs
+    using JET,
+        ExponentialFamily,
+        Distributions,
+        BayesBase,
+        LinearAlgebra,
+        StableRNGs,
+        ExponentialFamilyManifolds
     import ExponentialFamilyProjection:
         ControlVariateStrategy,
         ControlVariateStrategyState,
@@ -114,6 +125,11 @@ end
             supplementary in ((), (dist,))
 
             ef = convert(ExponentialFamilyDistribution, dist)
+            T = ExponentialFamily.exponential_family_typetag(ef)
+            d = size(mean(ef))
+            c = getconditioner(ef)
+            M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+
             supplementary_η = map(
                 d -> getnaturalparameters(convert(ExponentialFamilyDistribution, d)),
                 supplementary,
@@ -125,6 +141,7 @@ end
                     ControlVariateStrategy(rng = rng, nsamples = nsamples, state = nothing)
 
                 @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) prepare_state!(
+                    M,
                     strategy,
                     targetfn,
                     ef,
@@ -162,8 +179,8 @@ end
                     supplementary_η,
                 )
 
-                state1 = prepare_state!(strategy, targetfn, ef, supplementary_η)
-                state2 = prepare_state!(strategy, targetfn, ef, supplementary_η)
+                state1 = prepare_state!(M, strategy, targetfn, ef, supplementary_η)
+                state2 = prepare_state!(M, strategy, targetfn, ef, supplementary_η)
 
                 @test state1 !== state2
                 # `==` check that the content of the arrays are similar 
@@ -204,7 +221,7 @@ end
                 strategy_with_state =
                     ControlVariateStrategy(nsamples = nsamples, state = state3)
                 state3_prepared =
-                    prepare_state!(strategy_with_state, targetfn, ef, supplementary_η)
+                    prepare_state!(M, strategy_with_state, targetfn, ef, supplementary_η)
 
                 @test state3 === state3_prepared
                 @test getsamples(state3) === getsamples(state3_prepared)
