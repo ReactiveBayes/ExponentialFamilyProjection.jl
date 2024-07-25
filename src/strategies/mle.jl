@@ -22,6 +22,11 @@ function with_state(strategy::MLEStrategy, state)
     return MLEStrategy(seed = getseed(strategy), rng = getrng(strategy), state = state)
 end
 
+preprocess_strategy_argument(strategy::MLEStrategy, argument::AbstractArray) = strategy
+preprocess_strategy_argument(::MLEStrategy, argument::Any) = error(
+    lazy"`MLEStrategy` requires the projection argument to be an array of samples. Got `$(typeof(argument))` instead.",
+)
+
 function prepare_state!(
     M::AbstractManifold,
     strategy::MLEStrategy,
@@ -29,11 +34,6 @@ function prepare_state!(
     distribution,
     supplementary_η,
 ) where {S}
-    if !isa(projection_argument, AbstractArray)
-        error(
-            lazy"`MLEStrategy` requires the projection argument to be an array of samples. Got `$(typeof(projection_argument))` instead.",
-        )
-    end
     return prepare_state!(
         M,
         getstate(strategy),

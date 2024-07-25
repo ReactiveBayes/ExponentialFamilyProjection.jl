@@ -43,6 +43,11 @@ function with_state(strategy::ControlVariateStrategy, state)
     )
 end
 
+preprocess_strategy_argument(strategy::ControlVariateStrategy, argument::Any) = strategy
+preprocess_strategy_argument(::ControlVariateStrategy, argument::AbstractArray) = error(
+    lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(argument))` instead.",
+)
+
 function prepare_state!(
     M::AbstractManifold,
     strategy::ControlVariateStrategy,
@@ -50,11 +55,6 @@ function prepare_state!(
     distribution,
     supplementary_η,
 ) where {F}
-    if isa(projection_argument, AbstractArray)
-        error(
-            lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(projection_argument))` instead.",
-        )
-    end
     return prepare_state!(
         M,
         getstate(strategy),

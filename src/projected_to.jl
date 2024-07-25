@@ -99,14 +99,14 @@ end
 A type to hold the parameters for the projection procedure. 
 The following parameters are available:
     
-* `strategy = ExponentialFamilyProjection.ControlVariateStrategy()`: The strategy to use to compute the gradients.
+* `strategy = ExponentialFamilyProjection.DefaultStrategy()`: The strategy to use to compute the gradients.
 * `niterations = 100`: The number of iterations for the optimization procedure.
 * `tolerance = 1e-6`: The tolerance for the norm of the gradient.
 * `stepsize = ConstantStepsize(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
 * `usebuffer = Val(true)`: Whether to use a buffer for the projection. Must be either `Val(true)` or `Val(false)`. Disabling buffer can be useful for debugging purposes.
 """
 Base.@kwdef struct ProjectionParameters{S,I,T,P,B}
-    strategy::S = ControlVariateStrategy()
+    strategy::S = DefaultStrategy()
     niterations::I = 100
     tolerance::T = 1e-6
     stepsize::P = ConstantStepsize(0.1)
@@ -236,16 +236,18 @@ function project_to(
         return copy(getnaturalparameters(supplementary_ef))
     end
 
-    initialpoint = preprocess_initialpoint(initialpoint, M, parameters)
+    _strategy = preprocess_strategy_argument(getstrategy(parameters), projection_argument)
+    p = preprocess_initialpoint(initialpoint, M, _strategy)
 
-    state = prepare_state!(
+    _state = prepare_state!(
         M,
-        getstrategy(parameters),
+        _strategy,
         projection_argument,
-        convert(ExponentialFamilyDistribution, M, initialpoint),
+        convert(ExponentialFamilyDistribution, M, p),
         supplementary_η,
     )
-    strategy = with_state(getstrategy(parameters), state)
+    strategy = with_state(_strategy, _state)
+
 
     # We disable the default `debug` statements, which are set in `Manopt` 
     # in order to improve the performance a little bit
@@ -260,7 +262,7 @@ function project_to(
             strategy,
             buffer,
             parameters,
-            initialpoint,
+            p,
             kwargs,
         )
     end
@@ -276,18 +278,18 @@ function _kernel_project_to(
     strategy,
     buffer,
     parameters,
-    initialpoint,
+    p,
     kwargs,
 ) where {T}
     g_grad_g! =
         CVICostGradientObjective(projection_argument, supplementary_η, strategy, buffer)
     objective = ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 
-    q = initialpoint # `gradient_descent!` overrides `q`
+    q = p # `gradient_descent!` overrides `q`
     gradient_descent!(
         M,
         objective,
-        initialpoint;
+        p;
         stopping_criterion = get_stopping_criterion(parameters),
         stepsize = getstepsize(parameters),
         direction = BoundedNormUpdateRule(static(1)),
@@ -299,27 +301,27 @@ end
 
 # This function preprocess the initial point for the projection
 # If the initial point is not provided, it generates a new one with the `getinitialpoint` function
-function preprocess_initialpoint(initialpoint::Nothing, M, parameters)
-    return getinitialpoint(getstrategy(parameters), M)
+function preprocess_initialpoint(initialpoint::Nothing, M, strategy)
+    return getinitialpoint(strategy, M)
 end
 
-function preprocess_initialpoint(initialpoint::Any, M, parameters)
+function preprocess_initialpoint(initialpoint::Any, M, strategy)
     return preprocess_initialpoint(
         ExponentialFamily.exponential_family_typetag(M),
         initialpoint,
         M,
-        parameters,
+        strategy,
     )
 end
 
 # If the initial point is provided as the distribution type which we project on to,
 # we generate a new initial point using the `naturalparameters` of the distribution
-function preprocess_initialpoint(::Type{T}, initialpoint::T, M, parameters) where {T}
+function preprocess_initialpoint(::Type{T}, initialpoint::T, M, strategy) where {T}
     return preprocess_initialpoint(
         T,
         convert(ExponentialFamilyDistribution, initialpoint),
         M,
-        parameters,
+        strategy,
     )
 end
 
@@ -327,7 +329,7 @@ function preprocess_initialpoint(
     ::Type{T},
     initialpoint::ExponentialFamilyDistribution{T},
     M,
-    parameters,
+    strategy,
 ) where {T}
     return ExponentialFamilyManifolds.partition_point(
         M,
@@ -336,6 +338,6 @@ function preprocess_initialpoint(
 end
 
 # Otherwise we just copy the initial point, since we use it for the optimization in place
-function preprocess_initialpoint(_, initialpoint::AbstractArray, M, parameters)
+function preprocess_initialpoint(_, initialpoint::AbstractArray, M, strategy)
     return copy(initialpoint)
 end
