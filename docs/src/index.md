@@ -141,14 +141,14 @@ using StableRNGs
 hiddenbeta = Beta(10, 3)
 samples = rand(StableRNG(42), hiddenbeta, 1_000)
 prj = ProjectedTo(Beta)
-result = project_to(prj, targetf)
+result = project_to(prj, samples)
 @test kldivergence(result, hiddenbeta) < 1e-2 #hide
 result #hide
 ```
 
 ```@example projection
 plot(0.0:0.01:1.0, x -> pdf(hiddenbeta, x), label="real distribution", fill = 0, fillalpha = 0.2)
-histogram!(samples, label = "samples", normalize = :pdf)
+histogram!(samples, label = "samples", normalize = :pdf, fillalpha = 0.2)
 plot!(0.0:0.01:1.0, x -> pdf(result, x), label="estimated projection", fill = 0, fillalpha = 0.2)
 ```
 
