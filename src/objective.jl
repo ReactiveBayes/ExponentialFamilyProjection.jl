@@ -6,9 +6,11 @@ This structure provides an interface for `Manopt` to compute the cost and gradie
 
 # Arguments
 
+- `projection_parameters`: The parameters for projection, must be of type `ProjectionParameters`
 - `projection_argument`: The second argument of the `project_to` function.
 - `supplementary_η`: A tuple of additional natural parameters subtracted from the current estimated value in each optimization iteration.
 - `strategy`: Specifies the method for computing costs and gradients, which may support different `projection_argument` values.
+- `strategy_state`: The state for the `strategy`, usually created with `create_state!`
 - `buffer`: Optional; some strategies may use this to optimize memory allocation.
 
 !!! note
