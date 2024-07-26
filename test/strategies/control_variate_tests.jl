@@ -309,8 +309,10 @@ end
             manifold =
                 ExponentialFamilyManifolds.get_natural_manifold(typetag, dims, nothing)
 
-            targetfn_part = (x) -> logpdf(left, x)
-            targetfn_full = (x) -> logpdf(ProductOf(left, right), x)
+
+            targetfn_part = convert(BayesBase.InplaceLogpdf, (x) -> logpdf(left, x))
+            targetfn_full =
+                convert(BayesBase.InplaceLogpdf, (x) -> logpdf(ProductOf(left, right), x))
             ef = convert(ExponentialFamilyDistribution, right)
             supplementary_ef =
                 [getnaturalparameters(convert(ExponentialFamilyDistribution, right))]
@@ -319,23 +321,41 @@ end
             point = rand(StableRNG(42), manifold)
 
             costs = map(seeds) do seed
+                parameters = ProjectionParameters(seed = seed)
+                strategy = ExponentialFamilyProjection.ControlVariateStrategy(
+                    nsamples = nsamples,
+                )
+                state_part = ExponentialFamilyProjection.create_state!(
+                    strategy,
+                    manifold,
+                    parameters,
+                    targetfn_part,
+                    convert(ExponentialFamilyDistribution, manifold, point),
+                    supplementary_ef,
+                )
                 obj_part = ExponentialFamilyProjection.ProjectionCostGradientObjective(
+                    parameters,
                     targetfn_part,
                     supplementary_ef,
-                    ExponentialFamilyProjection.ControlVariateStrategy(
-                        nsamples = nsamples,
-                        seed = seed,
-                    ),
+                    strategy,
+                    state_part,
                     nothing,
                 )
 
+                state_full = ExponentialFamilyProjection.create_state!(
+                    strategy,
+                    manifold,
+                    parameters,
+                    targetfn_full,
+                    convert(ExponentialFamilyDistribution, manifold, point),
+                    [],
+                )
                 obj_full = ExponentialFamilyProjection.ProjectionCostGradientObjective(
+                    parameters,
                     targetfn_full,
                     [],
-                    ExponentialFamilyProjection.ControlVariateStrategy(
-                        nsamples = nsamples,
-                        seed = seed,
-                    ),
+                    strategy,
+                    state_full,
                     nothing,
                 )
 
