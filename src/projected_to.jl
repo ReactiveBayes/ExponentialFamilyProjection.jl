@@ -104,13 +104,17 @@ The following parameters are available:
 * `tolerance = 1e-6`: The tolerance for the norm of the gradient.
 * `stepsize = ConstantStepsize(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
 * `usebuffer = Val(true)`: Whether to use a buffer for the projection. Must be either `Val(true)` or `Val(false)`. Disabling buffer can be useful for debugging purposes.
+* `seed`: Optional; Seed for the `rng`
+* `rng`: Optional; Random number generator
 """
-Base.@kwdef struct ProjectionParameters{S,I,T,P,B}
+Base.@kwdef struct ProjectionParameters{S,I,T,P,B,D,N}
     strategy::S = DefaultStrategy()
     niterations::I = 100
     tolerance::T = 1e-6
     stepsize::P = ConstantStepsize(0.1)
     usebuffer::B = Val(true)
+    seed::D = 42
+    rng::N = StableRNG(seed)
 end
 
 """
@@ -124,6 +128,8 @@ getstrategy(parameters::ProjectionParameters) = parameters.strategy
 getniterations(parameters::ProjectionParameters) = parameters.niterations
 gettolerance(parameters::ProjectionParameters) = parameters.tolerance
 getstepsize(parameters::ProjectionParameters) = parameters.stepsize
+getseed(parameters::ProjectionParameters) = parameters.seed
+getrng(parameters::ProjectionParameters) = parameters.rng
 
 with_buffer(f::F, parameters::ProjectionParameters) where {F} =
     with_buffer(f, parameters.usebuffer, parameters)
@@ -216,7 +222,7 @@ function project_to(
     kwargs...,
 ) where {F}
     M = get_projected_to_manifold(prj)
-    parameters = get_projected_to_parameters(prj)
+    projection_parameters = get_projected_to_parameters(prj)
 
     # "Supplementary" natural parameters are parameters that are simply being subtracted 
     # from the natural parameters of the current estiamted distribution. This might be useful 
@@ -236,32 +242,36 @@ function project_to(
         return copy(getnaturalparameters(supplementary_ef))
     end
 
-    _strategy = preprocess_strategy_argument(getstrategy(parameters), projection_argument)
-    p = preprocess_initialpoint(initialpoint, M, _strategy)
+    strategy, projection_argument = preprocess_strategy_argument(
+        getstrategy(projection_parameters),
+        projection_argument,
+    )
+    p = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
 
-    _state = prepare_state!(
+    state = prepare_state!(
+        strategy,
+        nothing,
         M,
-        _strategy,
+        projection_parameters,
         projection_argument,
         convert(ExponentialFamilyDistribution, M, p),
         supplementary_η,
     )
-    strategy = with_state(_strategy, _state)
-
 
     # We disable the default `debug` statements, which are set in `Manopt` 
     # in order to improve the performance a little bit
     kwargs = !haskey(kwargs, :debug) ? (; kwargs..., debug = missing) : kwargs
 
-    return with_buffer(parameters) do buffer
+    return with_buffer(projection_parameters) do buffer
         return _kernel_project_to(
             get_projected_to_type(prj),
             M,
+            projection_parameters,
             projection_argument,
             supplementary_η,
             strategy,
+            state,
             buffer,
-            parameters,
             p,
             kwargs,
         )
@@ -273,16 +283,23 @@ end
 function _kernel_project_to(
     ::Type{T},
     M,
+    projection_parameters,
     projection_argument,
     supplementary_η,
     strategy,
+    state,
     buffer,
-    parameters,
     p,
     kwargs,
 ) where {T}
-    g_grad_g! =
-        CVICostGradientObjective(projection_argument, supplementary_η, strategy, buffer)
+    g_grad_g! = ProjectionCostGradientObjective(
+        projection_parameters,
+        projection_argument,
+        supplementary_η,
+        strategy,
+        state,
+        buffer,
+    )
     objective = ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 
     q = p # `gradient_descent!` overrides `q`
@@ -290,8 +307,8 @@ function _kernel_project_to(
         M,
         objective,
         p;
-        stopping_criterion = get_stopping_criterion(parameters),
-        stepsize = getstepsize(parameters),
+        stopping_criterion = get_stopping_criterion(projection_parameters),
+        stepsize = getstepsize(projection_parameters),
         direction = BoundedNormUpdateRule(static(1)),
         kwargs...,
     )
@@ -301,35 +318,44 @@ end
 
 # This function preprocess the initial point for the projection
 # If the initial point is not provided, it generates a new one with the `getinitialpoint` function
-function preprocess_initialpoint(initialpoint::Nothing, M, strategy)
-    return getinitialpoint(strategy, M)
+function preprocess_initialpoint(initialpoint::Nothing, strategy, M, parameters)
+    return getinitialpoint(strategy, M, parameters)
 end
 
-function preprocess_initialpoint(initialpoint::Any, M, strategy)
+function preprocess_initialpoint(initialpoint::Any, strategy, M, parameters)
     return preprocess_initialpoint(
         ExponentialFamily.exponential_family_typetag(M),
         initialpoint,
-        M,
         strategy,
+        M,
+        parameters,
     )
 end
 
 # If the initial point is provided as the distribution type which we project on to,
 # we generate a new initial point using the `naturalparameters` of the distribution
-function preprocess_initialpoint(::Type{T}, initialpoint::T, M, strategy) where {T}
+function preprocess_initialpoint(
+    ::Type{T},
+    initialpoint::T,
+    strategy,
+    M,
+    parameters,
+) where {T}
     return preprocess_initialpoint(
         T,
         convert(ExponentialFamilyDistribution, initialpoint),
-        M,
         strategy,
+        M,
+        parameters,
     )
 end
 
 function preprocess_initialpoint(
     ::Type{T},
     initialpoint::ExponentialFamilyDistribution{T},
-    M,
     strategy,
+    M,
+    parameters,
 ) where {T}
     return ExponentialFamilyManifolds.partition_point(
         M,
@@ -338,6 +364,6 @@ function preprocess_initialpoint(
 end
 
 # Otherwise we just copy the initial point, since we use it for the optimization in place
-function preprocess_initialpoint(_, initialpoint::AbstractArray, M, strategy)
+function preprocess_initialpoint(_, initialpoint::AbstractArray, strategy, M, parameters)
     return copy(initialpoint)
 end

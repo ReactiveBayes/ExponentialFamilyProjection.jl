@@ -140,7 +140,7 @@ end
 
 function compute_cost(
     M::AbstractManifold,
-    obj::CVICostGradientObjective,
+    obj::ProjectionCostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
     η,
@@ -153,7 +153,7 @@ end
 
 function compute_gradient!(
     M::AbstractManifold,
-    obj::CVICostGradientObjective,
+    obj::ProjectionCostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
     X,

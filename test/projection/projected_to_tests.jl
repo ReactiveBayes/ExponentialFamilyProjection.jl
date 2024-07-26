@@ -157,7 +157,7 @@ end
         Dirichlet([1, 1]),
         NormalMeanVariance(0.0, 1.0),
         MvNormalMeanCovariance([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
-        Chisq(30.0)
+        Chisq(30.0),
     ]
 
     for distribution in distributions
@@ -193,9 +193,10 @@ end
     prj = ProjectedTo(
         Beta,
         parameters = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(),
             tolerance = 1e-4,
             niterations = 300,
-            strategy = ExponentialFamilyProjection.ControlVariateStrategy(rng = rng),
+            rng = rng,
         ),
     )
 
@@ -495,5 +496,5 @@ end
     # Do not produce debug output by default
     @test_logs match_mode = :all project_to(prj, targetfn)
     @test_logs match_mode = :all project_to(prj, targetfn, debug = [])
-    
+
 end

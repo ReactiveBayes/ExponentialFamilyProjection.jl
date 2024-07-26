@@ -47,7 +47,7 @@ end
         strategy = ExponentialFamilyProjection.MLEStrategy()
         state = ExponentialFamilyProjection.prepare_state!(M, strategy, samples, ef, ())
         strategy = ExponentialFamilyProjection.with_state(strategy, state)
-        obj = ExponentialFamilyProjection.CVICostGradientObjective(
+        obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
             samples,
             (),
             strategy,

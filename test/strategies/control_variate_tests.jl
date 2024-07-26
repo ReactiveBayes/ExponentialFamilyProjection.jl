@@ -243,7 +243,7 @@ end
 end
 
 @testitem "Gradient shouldn't depend on the scale of the `logpdf` when nsamples goes to infinity" begin
-    import ExponentialFamilyProjection: CVICostGradientObjective, ControlVariateStrategy
+    import ExponentialFamilyProjection: ProjectionCostGradientObjective, ControlVariateStrategy
     import ExponentialFamilyManifolds: get_natural_manifold
     using StableRNGs, ExponentialFamily, Manifolds, BayesBase
 
@@ -259,8 +259,8 @@ end
     X1 = zero_vector(M, p)
     X2 = zero_vector(M, p)
 
-    objective1 = CVICostGradientObjective(targetfn1, (), strategy, nothing)
-    objective2 = CVICostGradientObjective(targetfn2, (), strategy, nothing)
+    objective1 = ProjectionCostGradientObjective(targetfn1, (), strategy, nothing)
+    objective2 = ProjectionCostGradientObjective(targetfn2, (), strategy, nothing)
 
     c1, X1 = objective1(M, X1, p)
     c2, X2 = objective2(M, X2, p)
@@ -309,7 +309,7 @@ end
             point = rand(StableRNG(42), manifold)
 
             costs = map(seeds) do seed
-                obj_part = ExponentialFamilyProjection.CVICostGradientObjective(
+                obj_part = ExponentialFamilyProjection.ProjectionCostGradientObjective(
                     targetfn_part,
                     supplementary_ef,
                     ExponentialFamilyProjection.ControlVariateStrategy(
@@ -319,7 +319,7 @@ end
                     nothing,
                 )
 
-                obj_full = ExponentialFamilyProjection.CVICostGradientObjective(
+                obj_full = ExponentialFamilyProjection.ProjectionCostGradientObjective(
                     targetfn_full,
                     [],
                     ExponentialFamilyProjection.ControlVariateStrategy(

@@ -154,6 +154,10 @@ plot!(0.0:0.01:1.0, x -> pdf(result, x), label="estimated projection", fill = 0,
 
 ## Manopt extensions
 
+```@docs 
+ExponentialFamilyProjection.ProjectionCostGradientObjective
+```
+
 ### Bounded direction update rule
 
 The `ExponentialFamilyProjection.jl` package implements a specialized gradient direction rule that limits the norm (manifold-specific) of the gradient to a pre-specified value.
