@@ -221,15 +221,16 @@ end
 
 @testitem "Gradient shouldn't depend on the scale of the `logpdf` when nsamples goes to infinity" begin
     import ExponentialFamilyProjection:
-        ProjectionCostGradientObjective, ControlVariateStrategy
+        ProjectionCostGradientObjective, ControlVariateStrategy, create_state!
     import ExponentialFamilyManifolds: get_natural_manifold
     using StableRNGs, ExponentialFamily, Manifolds, BayesBase
 
     dist = Beta(4, 6)
-    targetfn1 = (x) -> logpdf(dist, x)
-    targetfn2 = (x) -> logpdf(dist, x) - 1000
+    targetfn1 = convert(BayesBase.InplaceLogpdf, (x) -> logpdf(dist, x))
+    targetfn2 = convert(BayesBase.InplaceLogpdf, (x) -> logpdf(dist, x) - 1000)
 
     strategy = ControlVariateStrategy(nsamples = 10^6)
+    parameters = ProjectionParameters()
     M = get_natural_manifold(Beta, ())
 
     rng = StableRNG(42)
@@ -237,8 +238,39 @@ end
     X1 = zero_vector(M, p)
     X2 = zero_vector(M, p)
 
-    objective1 = ProjectionCostGradientObjective(targetfn1, (), strategy, nothing)
-    objective2 = ProjectionCostGradientObjective(targetfn2, (), strategy, nothing)
+    state1 = create_state!(
+        strategy,
+        M,
+        parameters,
+        targetfn1,
+        convert(ExponentialFamilyDistribution, M, p),
+        (),
+    )
+    state2 = create_state!(
+        strategy,
+        M,
+        parameters,
+        targetfn2,
+        convert(ExponentialFamilyDistribution, M, p),
+        (),
+    )
+
+    objective1 = ProjectionCostGradientObjective(
+        parameters,
+        targetfn1,
+        (),
+        strategy,
+        state1,
+        nothing,
+    )
+    objective2 = ProjectionCostGradientObjective(
+        parameters,
+        targetfn2,
+        (),
+        strategy,
+        state2,
+        nothing,
+    )
 
     c1, X1 = objective1(M, X1, p)
     c2, X2 = objective2(M, X2, p)
