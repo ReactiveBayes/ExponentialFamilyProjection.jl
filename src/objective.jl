@@ -14,7 +14,7 @@ This structure provides an interface for `Manopt` to compute the cost and gradie
 - `buffer`: Optional; some strategies may use this to optimize memory allocation.
 
 !!! note
-    This structure is internal and subject to change.
+    This structure is internal and is subject to change.
 """
 struct ProjectionCostGradientObjective{J,F,P,S,T,B}
     projection_parameters::J
