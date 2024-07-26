@@ -12,5 +12,7 @@ Rules:
 """
 struct DefaultStrategy end
 
-preprocess_strategy_argument(::DefaultStrategy, argument::AbstractArray) = MLEStrategy()
-preprocess_strategy_argument(::DefaultStrategy, argument::Any) = ControlVariateStrategy()
+preprocess_strategy_argument(::DefaultStrategy, argument::AbstractArray) =
+    preprocess_strategy_argument(MLEStrategy(), argument)
+preprocess_strategy_argument(::DefaultStrategy, argument::Any) =
+    preprocess_strategy_argument(ControlVariateStrategy(), argument)

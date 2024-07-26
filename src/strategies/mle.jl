@@ -38,9 +38,8 @@ gettargetfn(state::MLEStrategyState) = state.targetfn
 getconfig(state::MLEStrategyState) = state.config
 gettmpgrad(state::MLEStrategyState) = state.tmpgrad
 
-function prepare_state!(
+function create_state!(
     strategy::MLEStrategy,
-    ::Nothing,
     M::AbstractManifold,
     parameters::ProjectionParameters,
     samples::AbstractArray,

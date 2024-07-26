@@ -248,9 +248,8 @@ function project_to(
     )
     p = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
 
-    state = prepare_state!(
+    state = create_state!(
         strategy,
-        nothing,
         M,
         projection_parameters,
         projection_argument,

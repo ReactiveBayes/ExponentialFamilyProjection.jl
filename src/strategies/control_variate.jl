@@ -60,9 +60,8 @@ getlogbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
 getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
 getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
 
-function prepare_state!(
+function create_state!(
     strategy::ControlVariateStrategy,
-    ::Nothing,
     M::AbstractManifold,
     parameters::ProjectionParameters,
     projection_argument::InplaceLogpdf,

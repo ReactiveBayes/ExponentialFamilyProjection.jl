@@ -1,25 +1,22 @@
 @testitem "ControlVariateStrategy generic properties" begin
     using Random,
-        Bumper, LinearAlgebra, Distributions, ExponentialFamily, ExponentialFamilyManifolds
+        BayesBase,
+        Bumper,
+        LinearAlgebra,
+        Distributions,
+        ExponentialFamily,
+        ExponentialFamilyManifolds
     import ExponentialFamilyProjection:
         ControlVariateStrategy,
+        ProjectionParameters,
         getnsamples,
-        getseed,
-        getrng,
-        getbuffer,
-        getstate,
+        create_state!,
         prepare_state!
 
     @test ControlVariateStrategy() == ControlVariateStrategy()
     @test ControlVariateStrategy(nsamples = 100) == ControlVariateStrategy(nsamples = 100)
-    @test ControlVariateStrategy(seed = 42) == ControlVariateStrategy(seed = 42)
-    @test ControlVariateStrategy(rng = MersenneTwister(42)) ==
-          ControlVariateStrategy(rng = MersenneTwister(42))
-
     @test ControlVariateStrategy(nsamples = 50) !== ControlVariateStrategy(nsamples = 100)
-    @test ControlVariateStrategy(seed = 41) !== ControlVariateStrategy(seed = 42)
-    @test ControlVariateStrategy(rng = MersenneTwister(41)) !==
-          ControlVariateStrategy(rng = MersenneTwister(42))
+
 
     @testset "nsamples" begin
         strategy = ControlVariateStrategy(nsamples = 100)
@@ -31,56 +28,30 @@
         @test getnsamples(strategy) === 200
     end
 
-    @testset "seed" begin
-        strategy = ControlVariateStrategy(seed = 42)
-
-        @test getseed(strategy) === 42
-
-        strategy = ControlVariateStrategy(seed = 24)
-
-        @test getseed(strategy) === 24
-    end
-
-    @testset "rng" begin
-        rng1 = MersenneTwister(42)
-        rng2 = MersenneTwister(24)
-        strategy = ControlVariateStrategy(rng = rng1)
-
-        @test getrng(strategy) === rng1
-        @test getrng(strategy) !== rng2
-
-        strategy = ControlVariateStrategy(rng = rng2)
-
-        @test getrng(strategy) !== rng1
-        @test getrng(strategy) === rng2
-    end
-
-    @testset "state" begin
+    @testset "create_state!" begin
         distributions = [Beta(5, 5), Chisq(10)]
+        parameters = ProjectionParameters()
         for dist in distributions
             ef = convert(ExponentialFamilyDistribution, Beta(5, 5))
             T = ExponentialFamily.exponential_family_typetag(ef)
             d = size(mean(ef))
             c = getconditioner(ef)
             M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
-            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, ())
-            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, ())
-            @test state1 == state2
-            @test ControlVariateStrategy(state = state1) ==
-                  ControlVariateStrategy(state = state2)
-
-            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef,))
-            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef,))
-
+            arg = convert(BayesBase.InplaceLogpdf, (x) -> 1)
+            state1 = create_state!(ControlVariateStrategy(), M, parameters, arg, ef, ())
+            state2 = create_state!(ControlVariateStrategy(), M, parameters, arg, ef, ())
             @test state1 == state2
 
-            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
-            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, (ef, ef))
+            state1 = create_state!(ControlVariateStrategy(), M, parameters, arg, ef, (ef,))
+            state2 = create_state!(ControlVariateStrategy(), M, parameters, arg, ef, (ef,))
+
             @test state1 == state2
 
-            state1 = prepare_state!(M, ControlVariateStrategy(), (x) -> 1, ef, ())
-            state2 = prepare_state!(M, ControlVariateStrategy(), (x) -> 2, ef, ())
-            @test state1 != state2
+            state1 =
+                create_state!(ControlVariateStrategy(), M, parameters, arg, ef, (ef, ef))
+            state2 =
+                create_state!(ControlVariateStrategy(), M, parameters, arg, ef, (ef, ef))
+            @test state1 == state2
         end
     end
 end
@@ -96,6 +67,7 @@ end
     import ExponentialFamilyProjection:
         ControlVariateStrategy,
         ControlVariateStrategyState,
+        create_state!,
         prepare_state!,
         getsamples,
         getlogpdfs,
@@ -112,17 +84,12 @@ end
     ]
 
     for dist in dists
-        targetfn1 = let dist = dist
-            (x) -> logpdf(dist, x)
-        end
 
-        targetfn2 = BayesBase.InplaceLogpdf(let dist = dist
+        targetfn = BayesBase.InplaceLogpdf(let dist = dist
             (out, x) -> logpdf(dist, x)
         end)
 
-        for targetfn in [targetfn1, targetfn2],
-            nsamples in (100, 200),
-            supplementary in ((), (dist,))
+        for nsamples in (100, 200), supplementary in ((), (dist,))
 
             ef = convert(ExponentialFamilyDistribution, dist)
             T = ExponentialFamily.exponential_family_typetag(ef)
@@ -137,12 +104,13 @@ end
 
             @testset "Empty state should create new state every time (no supplementary_η)" begin
                 rng = StableRNG(42)
-                strategy =
-                    ControlVariateStrategy(rng = rng, nsamples = nsamples, state = nothing)
+                parameters = ProjectionParameters(rng = rng)
+                strategy = ControlVariateStrategy(nsamples = nsamples)
 
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) prepare_state!(
-                    M,
+                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) create_state!(
                     strategy,
+                    M,
+                    parameters,
                     targetfn,
                     ef,
                     supplementary_η,
@@ -179,9 +147,12 @@ end
                     supplementary_η,
                 )
 
-                state1 = prepare_state!(M, strategy, targetfn, ef, supplementary_η)
-                state2 = prepare_state!(M, strategy, targetfn, ef, supplementary_η)
+                state1 =
+                    create_state!(strategy, M, parameters, targetfn, ef, supplementary_η)
+                state2 =
+                    create_state!(strategy, M, parameters, targetfn, ef, supplementary_η)
 
+                @test state1 == state2
                 @test state1 !== state2
                 # `==` check that the content of the arrays are similar 
                 # `!==` checks that the arrays are different in memory
@@ -218,10 +189,16 @@ end
                     gradsamples = gradsamples,
                 )
 
-                strategy_with_state =
-                    ControlVariateStrategy(nsamples = nsamples, state = state3)
-                state3_prepared =
-                    prepare_state!(M, strategy_with_state, targetfn, ef, supplementary_η)
+                strategy = ControlVariateStrategy(nsamples = nsamples)
+                state3_prepared = prepare_state!(
+                    strategy,
+                    state3,
+                    M,
+                    parameters,
+                    targetfn,
+                    ef,
+                    supplementary_η,
+                )
 
                 @test state3 === state3_prepared
                 @test getsamples(state3) === getsamples(state3_prepared)
@@ -243,7 +220,8 @@ end
 end
 
 @testitem "Gradient shouldn't depend on the scale of the `logpdf` when nsamples goes to infinity" begin
-    import ExponentialFamilyProjection: ProjectionCostGradientObjective, ControlVariateStrategy
+    import ExponentialFamilyProjection:
+        ProjectionCostGradientObjective, ControlVariateStrategy
     import ExponentialFamilyManifolds: get_natural_manifold
     using StableRNGs, ExponentialFamily, Manifolds, BayesBase
 
