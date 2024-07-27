@@ -103,7 +103,6 @@ The following parameters are available:
 * `niterations = 100`: The number of iterations for the optimization procedure.
 * `tolerance = 1e-6`: The tolerance for the norm of the gradient.
 * `stepsize = ConstantStepsize(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
-* `usebuffer = Val(true)`: Whether to use a buffer for the projection. Must be either `Val(true)` or `Val(false)`. Disabling buffer can be useful for debugging purposes.
 * `seed`: Optional; Seed for the `rng`
 * `rng`: Optional; Random number generator
 """
