@@ -18,10 +18,10 @@ Base.@kwdef struct ControlVariateStrategy{S}
     nsamples::S = 2000
 end
 
-getnsamples(strategy::ControlVariateStrategy) = strategy.nsamples
+get_nsamples(strategy::ControlVariateStrategy) = strategy.nsamples
 
 function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
-    return getnsamples(a) == getnsamples(b)
+    return get_nsamples(a) == get_nsamples(b)
 end
 
 function getinitialpoint(
@@ -54,11 +54,11 @@ function Base.:(==)(a::ControlVariateStrategyState, b::ControlVariateStrategySta
            a.gradsamples == b.gradsamples
 end
 
-getsamples(state::ControlVariateStrategyState) = state.samples
-getlogpdfs(state::ControlVariateStrategyState) = state.logpdfs
-getlogbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
-getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
-getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
+get_samples(state::ControlVariateStrategyState) = state.samples
+get_logpdfs(state::ControlVariateStrategyState) = state.logpdfs
+get_logbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
+get_sufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
+get_gradsamples(state::ControlVariateStrategyState) = state.gradsamples
 
 function create_state!(
     strategy::ControlVariateStrategy,
@@ -71,7 +71,7 @@ function create_state!(
 
     # If the `state` saved in `ControlVariateStrategy` is `nothing`
     # we simply create new containers for the samples, logpdfs, etc.
-    nsamples = getnsamples(strategy)
+    nsamples = get_nsamples(strategy)
     rng = getrng(parameters)
     samples = prepare_samples_container(rng, initial_ef, nsamples, supplementary_η)
     logpdfs = prepare_logpdfs_container(rng, initial_ef, nsamples, supplementary_η)
@@ -159,15 +159,15 @@ function prepare_state!(
     # This is important not only for reproducibility, but also to ensure
     # that the gradient computation is stable
     Random.seed!(getrng(parameters), getseed(parameters))
-    Random.rand!(getrng(parameters), distribution, getsamples(state))
+    Random.rand!(getrng(parameters), distribution, get_samples(state))
 
-    _, sample_container = ExponentialFamily.check_logpdf(distribution, getsamples(state))
+    _, sample_container = ExponentialFamily.check_logpdf(distribution, get_samples(state))
 
     glogpartion = ExponentialFamily.gradlogpartition(distribution)
-    J = size(getgradsamples(state), 1)
+    J = size(get_gradsamples(state), 1)
 
     inplace_projection_argument = convert(BayesBase.InplaceLogpdf, projection_argument)
-    inplace_projection_argument(getlogpdfs(state), sample_container)
+    inplace_projection_argument(get_logpdfs(state), sample_container)
 
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
 

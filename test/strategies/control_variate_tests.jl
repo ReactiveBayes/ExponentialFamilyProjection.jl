@@ -9,7 +9,7 @@
     import ExponentialFamilyProjection:
         ControlVariateStrategy,
         ProjectionParameters,
-        getnsamples,
+        get_nsamples,
         create_state!,
         prepare_state!
 
@@ -21,11 +21,11 @@
     @testset "nsamples" begin
         strategy = ControlVariateStrategy(nsamples = 100)
 
-        @test getnsamples(strategy) === 100
+        @test get_nsamples(strategy) === 100
 
         strategy = ControlVariateStrategy(nsamples = 200)
 
-        @test getnsamples(strategy) === 200
+        @test get_nsamples(strategy) === 200
     end
 
     @testset "create_state!" begin
@@ -69,11 +69,11 @@ end
         ControlVariateStrategyState,
         create_state!,
         prepare_state!,
-        getsamples,
-        getlogpdfs,
-        getlogbasemeasures,
-        getsufficientstatistics,
-        getgradsamples
+        get_samples,
+        get_logpdfs,
+        get_logbasemeasures,
+        get_sufficientstatistics,
+        get_gradsamples
 
     dists = [
         NormalMeanVariance(0, 1),
@@ -162,19 +162,19 @@ end
                 @test state1 !== state2
                 # `==` check that the content of the arrays are similar 
                 # `!==` checks that the arrays are different in memory
-                @test getsamples(state1) == getsamples(state2)
-                @test getsamples(state1) !== getsamples(state2)
-                @test getlogpdfs(state1) == getlogpdfs(state2)
-                @test getlogpdfs(state1) !== getlogpdfs(state2)
-                @test getsufficientstatistics(state1) == getsufficientstatistics(state2)
-                @test getsufficientstatistics(state1) !== getsufficientstatistics(state2)
-                @test getgradsamples(state1) == getgradsamples(state2)
-                @test getgradsamples(state1) !== getgradsamples(state2)
+                @test get_samples(state1) == get_samples(state2)
+                @test get_samples(state1) !== get_samples(state2)
+                @test get_logpdfs(state1) == get_logpdfs(state2)
+                @test get_logpdfs(state1) !== get_logpdfs(state2)
+                @test get_sufficientstatistics(state1) == get_sufficientstatistics(state2)
+                @test get_sufficientstatistics(state1) !== get_sufficientstatistics(state2)
+                @test get_gradsamples(state1) == get_gradsamples(state2)
+                @test get_gradsamples(state1) !== get_gradsamples(state2)
 
                 if isbasemeasureconstant(ef) === ConstantBaseMeasure()
-                    @test getlogbasemeasures(state1) === getlogbasemeasures(state2)
+                    @test get_logbasemeasures(state1) === get_logbasemeasures(state2)
                 else
-                    @test getlogbasemeasures(state1) !== getlogbasemeasures(state2)
+                    @test get_logbasemeasures(state1) !== get_logbasemeasures(state2)
                 end
 
                 samples = rand(ef, nsamples)
@@ -207,18 +207,18 @@ end
                 )
 
                 @test state3 === state3_prepared
-                @test getsamples(state3) === getsamples(state3_prepared)
-                @test getlogpdfs(state3) === getlogpdfs(state3_prepared)
-                @test getsufficientstatistics(state3) ===
-                      getsufficientstatistics(state3_prepared)
-                @test getlogbasemeasures(state3) === getlogbasemeasures(state3_prepared)
-                @test getgradsamples(state3) === getgradsamples(state3_prepared)
+                @test get_samples(state3) === get_samples(state3_prepared)
+                @test get_logpdfs(state3) === get_logpdfs(state3_prepared)
+                @test get_sufficientstatistics(state3) ===
+                      get_sufficientstatistics(state3_prepared)
+                @test get_logbasemeasures(state3) === get_logbasemeasures(state3_prepared)
+                @test get_gradsamples(state3) === get_gradsamples(state3_prepared)
 
-                @test getsamples(state1) == getsamples(state3)
-                @test getlogpdfs(state1) == getlogpdfs(state3)
-                @test getlogbasemeasures(state1) == getlogbasemeasures(state3)
-                @test getsufficientstatistics(state1) == getsufficientstatistics(state3)
-                @test getgradsamples(state1) == getgradsamples(state3)
+                @test get_samples(state1) == get_samples(state3)
+                @test get_logpdfs(state1) == get_logpdfs(state3)
+                @test get_logbasemeasures(state1) == get_logbasemeasures(state3)
+                @test get_sufficientstatistics(state1) == get_sufficientstatistics(state3)
+                @test get_gradsamples(state1) == get_gradsamples(state3)
             end
         end
     end
