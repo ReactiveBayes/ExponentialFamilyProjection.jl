@@ -33,9 +33,6 @@ The projection is performed by calling the `project_to` function with the specif
 ExponentialFamilyProjection.project_to
 ```
 
-!!! note
-    Different strategies are compatible with different types of arguments. Read [Optimization strategies](@ref opt-strategies) section for more information.
-
 ## [Optimization strategies](@id opt-strategies)
 
 The optimization procedure requires computing the expectation of the gradient to perform gradient descent in the natural parameters space. Currently, the library provides the following strategies for computing these expectations:
