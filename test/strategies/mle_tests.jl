@@ -44,27 +44,26 @@ end
         d = size(rand(rng, ef))
         M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
         p = ProjectionParameters()
+        η = getnaturalparameters(ef)
 
         strategy = ExponentialFamilyProjection.MLEStrategy()
         state = ExponentialFamilyProjection.create_state!(strategy, M, p, samples, ef, ())
         obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
             p,
             samples,
+            copy(η),
             (),
             strategy,
             state,
-            nothing,
         )
 
-        η = getnaturalparameters(ef)
         _logpartition = logpartition(ef)
         _gradlogpartition = gradlogpartition(ef)
         _inv_fisher = inv(fisherinformation(ef))
         cost = ExponentialFamilyProjection.compute_cost(
+            M,
             strategy,
             state,
-            obj,
-            M,
             η,
             _logpartition,
             _gradlogpartition,
@@ -74,10 +73,9 @@ end
         gradient = similar(η)
 
         ExponentialFamilyProjection.compute_gradient!(
+            M,
             strategy,
             state,
-            obj,
-            M,
             gradient,
             η,
             _logpartition,

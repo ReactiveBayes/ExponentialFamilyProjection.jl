@@ -64,7 +64,6 @@ function prepare_state! end
 """
     compute_cost(
         M::AbstractManifold,
-        obj::ProjectionCostGradientObjective,
         strategy,
         state,
         η,
@@ -77,7 +76,6 @@ Compute the cost using the provided `strategy`.
 
 # Arguments
 - `M::AbstractManifold`: The manifold on which the computations are performed.
-- `obj::ProjectionCostGradientObjective`: The objective function for which the cost is computed.
 - `strategy`: The strategy used for computation of the cost value.
 - `state`: The current state for the `strategy`.
 - `η`: Parameter vector.
@@ -93,7 +91,6 @@ function compute_cost end
 """
     compute_gradient!(
         M::AbstractManifold,
-        obj::ProjectionCostGradientObjective,
         strategy,
         state,
         X,
@@ -107,7 +104,6 @@ Updates the gradient `X` in-place using the provided `strategy`.
 
 # Arguments
 - `M::AbstractManifold`: The manifold on which the computations are performed.
-- `obj::ProjectionCostGradientObjective`: The objective function for which the gradient is computed.
 - `strategy`: The strategy used for computation of the gradient value.
 - `state`: The current state of the control variate strategy.
 - `X`: The storage for the gradient.

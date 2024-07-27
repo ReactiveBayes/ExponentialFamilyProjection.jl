@@ -10,13 +10,20 @@
         ControlVariateStrategy,
         ProjectionParameters,
         get_nsamples,
+        get_buffer,
         create_state!,
         prepare_state!
 
-    @test ControlVariateStrategy() == ControlVariateStrategy()
-    @test ControlVariateStrategy(nsamples = 100) == ControlVariateStrategy(nsamples = 100)
-    @test ControlVariateStrategy(nsamples = 50) !== ControlVariateStrategy(nsamples = 100)
-
+    @test ControlVariateStrategy() !== ControlVariateStrategy() # buffers are different
+    @test ControlVariateStrategy(nsamples = 100, buffer = nothing) ==
+          ControlVariateStrategy(nsamples = 100, buffer = nothing)
+    buffer = Bumper.default_buffer()
+    @test ControlVariateStrategy(nsamples = 100, buffer = buffer) ==
+          ControlVariateStrategy(nsamples = 100, buffer = buffer)
+    @test ControlVariateStrategy(nsamples = 50, buffer = nothing) !==
+          ControlVariateStrategy(nsamples = 100, buffer = nothing)
+    @test ControlVariateStrategy(nsamples = 50, buffer = buffer) !==
+          ControlVariateStrategy(nsamples = 100, buffer = buffer)
 
     @testset "nsamples" begin
         strategy = ControlVariateStrategy(nsamples = 100)
@@ -26,6 +33,16 @@
         strategy = ControlVariateStrategy(nsamples = 200)
 
         @test get_nsamples(strategy) === 200
+    end
+
+    @testset "buffer" begin
+        strategy = ControlVariateStrategy(buffer = Bumper.default_buffer())
+
+        @test get_buffer(strategy) === Bumper.default_buffer()
+
+        strategy = ControlVariateStrategy(buffer = nothing)
+
+        @test get_buffer(strategy) === nothing
     end
 
     @testset "create_state!" begin
@@ -264,18 +281,18 @@ end
     objective1 = ProjectionCostGradientObjective(
         parameters,
         targetfn1,
+        copy(p),
         (),
         strategy,
         state1,
-        nothing,
     )
     objective2 = ProjectionCostGradientObjective(
         parameters,
         targetfn2,
+        copy(p),
         (),
         strategy,
         state2,
-        nothing,
     )
 
     c1, X1 = objective1(M, X1, p)
@@ -341,10 +358,10 @@ end
                 obj_part = ExponentialFamilyProjection.ProjectionCostGradientObjective(
                     parameters,
                     targetfn_part,
+                    copy(point),
                     supplementary_ef,
                     strategy,
                     state_part,
-                    nothing,
                 )
 
                 state_full = ExponentialFamilyProjection.create_state!(
@@ -358,10 +375,10 @@ end
                 obj_full = ExponentialFamilyProjection.ProjectionCostGradientObjective(
                     parameters,
                     targetfn_full,
+                    copy(point),
                     [],
                     strategy,
                     state_full,
-                    nothing,
                 )
 
                 X2 = Manopt.zero_vector(manifold, point)
@@ -396,4 +413,49 @@ end
         [0.5],
     )
 
+end
+
+@testitem "Projection result should not depend on the usage of buffer" begin
+    using ExponentialFamily, BayesBase, Bumper, StaticTools
+    distributions = [
+        Beta(10, 10),
+        Gamma(10, 10),
+        Exponential(1),
+        LogNormal(0, 1),
+        Dirichlet([1, 1]),
+        NormalMeanVariance(0.0, 1.0),
+        MvNormalMeanCovariance([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
+        Chisq(30.0),
+    ]
+
+    for distribution in distributions
+        parameters_with_buffer = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(
+                buffer = StaticTools.MallocSlabBuffer(),
+            ),
+        )
+        parameters_without_buffer = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(buffer = nothing),
+        )
+
+        dims = size(rand(distribution))
+
+        prj_with_buffer = ProjectedTo(
+            ExponentialFamily.exponential_family_typetag(distribution),
+            dims...;
+            parameters = parameters_with_buffer,
+        )
+        prj_without_buffer = ProjectedTo(
+            ExponentialFamily.exponential_family_typetag(distribution),
+            dims...;
+            parameters = parameters_without_buffer,
+        )
+
+        targetfn = (x) -> logpdf(distribution, x)
+        result_with_buffer = project_to(prj_with_buffer, targetfn)
+        result_without_buffer = project_to(prj_without_buffer, targetfn)
+
+        # Small differences are allowed due to different LinearAlgebra routines
+        @test result_with_buffer ≈ result_without_buffer
+    end
 end

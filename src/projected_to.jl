@@ -107,12 +107,11 @@ The following parameters are available:
 * `seed`: Optional; Seed for the `rng`
 * `rng`: Optional; Random number generator
 """
-Base.@kwdef struct ProjectionParameters{S,I,T,P,B,D,N}
+Base.@kwdef struct ProjectionParameters{S,I,T,P,D,N}
     strategy::S = DefaultStrategy()
     niterations::I = 100
     tolerance::T = 1e-6
     stepsize::P = ConstantStepsize(0.1)
-    usebuffer::B = Val(true)
     seed::D = 42
     rng::N = StableRNG(seed)
 end
@@ -130,22 +129,6 @@ gettolerance(parameters::ProjectionParameters) = parameters.tolerance
 getstepsize(parameters::ProjectionParameters) = parameters.stepsize
 getseed(parameters::ProjectionParameters) = parameters.seed
 getrng(parameters::ProjectionParameters) = parameters.rng
-
-with_buffer(f::F, parameters::ProjectionParameters) where {F} =
-    with_buffer(f, parameters.usebuffer, parameters)
-
-with_buffer(f::F, buffer, ::ProjectionParameters) where {F} = f(buffer)
-with_buffer(f::F, ::Val{false}, ::ProjectionParameters) where {F} = f(nothing)
-with_buffer(f::F, ::Val{true}, ::ProjectionParameters) where {F} =
-    let buffer = MallocSlabBuffer()
-        try
-            f(buffer)
-        catch exception
-            rethrow(exception)
-        finally
-            free(buffer)
-        end
-    end
 
 function Manopt.get_stopping_criterion(parameters::ProjectionParameters)
     return Manopt.get_stopping_criterion(
@@ -246,14 +229,15 @@ function project_to(
         getstrategy(projection_parameters),
         projection_argument,
     )
-    p = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
+    current_η = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
+    current_ef = convert(ExponentialFamilyDistribution, M, current_η)
 
     state = create_state!(
         strategy,
         M,
         projection_parameters,
         projection_argument,
-        convert(ExponentialFamilyDistribution, M, p),
+        current_ef,
         supplementary_η,
     )
 
@@ -261,20 +245,17 @@ function project_to(
     # in order to improve the performance a little bit
     kwargs = !haskey(kwargs, :debug) ? (; kwargs..., debug = missing) : kwargs
 
-    return with_buffer(projection_parameters) do buffer
-        return _kernel_project_to(
-            get_projected_to_type(prj),
-            M,
-            projection_parameters,
-            projection_argument,
-            supplementary_η,
-            strategy,
-            state,
-            buffer,
-            p,
-            kwargs,
-        )
-    end
+    return _kernel_project_to(
+        get_projected_to_type(prj),
+        M,
+        projection_parameters,
+        projection_argument,
+        supplementary_η,
+        strategy,
+        state,
+        current_η,
+        kwargs,
+    )
 end
 
 # see https://docs.julialang.org/en/v1/manual/performance-tips/#kernel-functions
@@ -287,25 +268,26 @@ function _kernel_project_to(
     supplementary_η,
     strategy,
     state,
-    buffer,
-    p,
+    current_η,
     kwargs,
 ) where {T}
     g_grad_g! = ProjectionCostGradientObjective(
         projection_parameters,
         projection_argument,
+        copy(current_η),
         supplementary_η,
         strategy,
         state,
-        buffer,
     )
     objective = ManifoldCostGradientObjective(g_grad_g!; evaluation = InplaceEvaluation())
 
-    q = p # `gradient_descent!` overrides `q`
+    # `gradient_descent!` is a type-unstable call, so better not to use `q = gradient_descent!`
+    # `gradient_descent!` will override `q` instead
+    q = current_η
     gradient_descent!(
         M,
         objective,
-        p;
+        current_η;
         stopping_criterion = get_stopping_criterion(projection_parameters),
         stepsize = getstepsize(projection_parameters),
         direction = BoundedNormUpdateRule(static(1)),

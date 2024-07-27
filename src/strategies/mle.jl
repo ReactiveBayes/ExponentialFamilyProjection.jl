@@ -78,7 +78,7 @@ function prepare_state!(
     M::AbstractManifold,
     parameters::ProjectionParameters,
     samples::AbstractArray,
-    distribution,
+    current_ef,
     supplementary_η,
 )
     return state
@@ -109,7 +109,6 @@ end
 
 function compute_cost(
     M::AbstractManifold,
-    obj::ProjectionCostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
     η,
@@ -122,7 +121,6 @@ end
 
 function compute_gradient!(
     M::AbstractManifold,
-    obj::ProjectionCostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
     X,

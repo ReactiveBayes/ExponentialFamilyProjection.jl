@@ -8,32 +8,33 @@ This structure provides an interface for `Manopt` to compute the cost and gradie
 
 - `projection_parameters`: The parameters for projection, must be of type `ProjectionParameters`
 - `projection_argument`: The second argument of the `project_to` function.
-- `supplementary_η`: A tuple of additional natural parameters subtracted from the current estimated value in each optimization iteration.
+- `current_η`: Current optimization point.
+- `supplementary_η`: A tuple of additional natural parameters subtracted from the current point in each optimization iteration.
 - `strategy`: Specifies the method for computing costs and gradients, which may support different `projection_argument` values.
 - `strategy_state`: The state for the `strategy`, usually created with `create_state!`
-- `buffer`: Optional; some strategies may use this to optimize memory allocation.
 
 !!! note
     This structure is internal and is subject to change.
 """
-struct ProjectionCostGradientObjective{J,F,P,S,T,B}
+struct ProjectionCostGradientObjective{J,F,C,P,S,T}
     projection_parameters::J
     projection_argument::F
+    current_η::C
     supplementary_η::P
     strategy::S
     strategy_state::T
-    buffer::B
 end
 
 get_projection_parameters(obj::ProjectionCostGradientObjective) = obj.projection_parameters
 get_projection_argument(obj::ProjectionCostGradientObjective) = obj.projection_argument
+get_current_η(obj::ProjectionCostGradientObjective) = obj.current_η
 get_supplementary_η(obj::ProjectionCostGradientObjective) = obj.supplementary_η
 get_strategy(obj::ProjectionCostGradientObjective) = obj.strategy
 get_strategy_state(obj::ProjectionCostGradientObjective) = obj.strategy_state
-get_buffer(obj::ProjectionCostGradientObjective) = obj.buffer
 
 function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
-    current_ef = convert(ExponentialFamilyDistribution, M, p)
+    current_η = copyto!(get_current_η(objective), p)
+    current_ef = convert(ExponentialFamilyDistribution, M, current_η)
 
     strategy = get_strategy(objective)
     state = get_strategy_state(objective)
@@ -59,26 +60,24 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
     # If we have some supplementary natural parameters in the objective 
     # we must subtract them from the natural parameters of the current η
     foreach(supplementary_η) do s_η
-        vmap!(-, η, η, s_η)
+        vmap!(-, current_η, current_η, s_η)
     end
 
     c = compute_cost(
         M,
-        objective,
         strategy,
         state,
-        η,
+        current_η,
         logpartition,
         gradlogpartition,
         inv_fisher,
     )
     X = compute_gradient!(
         M,
-        objective,
         strategy,
         state,
         X,
-        η,
+        current_η,
         logpartition,
         gradlogpartition,
         inv_fisher,

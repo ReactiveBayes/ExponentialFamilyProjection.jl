@@ -1,4 +1,4 @@
-using StableRNGs, LoopVectorization, Bumper, FillArrays
+using StableRNGs, LoopVectorization, Bumper, FillArrays, StaticTools
 
 import Random: AbstractRNG
 import BayesBase: InplaceLogpdf
@@ -10,18 +10,21 @@ A strategy for gradient descent optimization and gradients computations that res
 
 The following parameters are available:
 * `nsamples = 2000`: The number of samples to use for estimates
+* `buffer = StaticTools.MallocSlabBuffer()`: Advanced option; A buffer for temporary computations
 
 !!! note
     This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
-Base.@kwdef struct ControlVariateStrategy{S}
+Base.@kwdef struct ControlVariateStrategy{S,B}
     nsamples::S = 2000
+    buffer::B = StaticTools.MallocSlabBuffer()
 end
 
 get_nsamples(strategy::ControlVariateStrategy) = strategy.nsamples
+get_buffer(strategy::ControlVariateStrategy) = strategy.buffer
 
 function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
-    return get_nsamples(a) == get_nsamples(b)
+    return get_nsamples(a) == get_nsamples(b) && get_buffer(a) == get_buffer(b)
 end
 
 function getinitialpoint(
@@ -151,7 +154,7 @@ function prepare_state!(
     M::AbstractManifold,
     parameters::ProjectionParameters,
     projection_argument,
-    distribution,
+    current_ef,
     supplementary_η,
 )
 
@@ -159,11 +162,11 @@ function prepare_state!(
     # This is important not only for reproducibility, but also to ensure
     # that the gradient computation is stable
     Random.seed!(getrng(parameters), getseed(parameters))
-    Random.rand!(getrng(parameters), distribution, get_samples(state))
+    Random.rand!(getrng(parameters), current_ef, get_samples(state))
 
-    _, sample_container = ExponentialFamily.check_logpdf(distribution, get_samples(state))
+    _, sample_container = ExponentialFamily.check_logpdf(current_ef, get_samples(state))
 
-    glogpartion = ExponentialFamily.gradlogpartition(distribution)
+    glogpartion = ExponentialFamily.gradlogpartition(current_ef)
     J = size(get_gradsamples(state), 1)
 
     inplace_projection_argument = convert(BayesBase.InplaceLogpdf, projection_argument)
@@ -172,7 +175,7 @@ function prepare_state!(
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
 
     nonconstantbasemeasure =
-        ExponentialFamily.isbasemeasureconstant(distribution) === NonConstantBaseMeasure()
+        ExponentialFamily.isbasemeasureconstant(current_ef) === NonConstantBaseMeasure()
 
     foreach(enumerate(sample_container)) do (i, sample)
         # if `basemeasure` is constant we assume that 
@@ -180,11 +183,11 @@ function prepare_state!(
         if nonconstantbasemeasure
             @inbounds state.logbasemeasures[i] =
                 one_minus_n_of_supplementary *
-                ExponentialFamily.logbasemeasure(distribution, sample)
+                ExponentialFamily.logbasemeasure(current_ef, sample)
         end
 
         sufficientstatistics = __projection_fast_pack_parameters(
-            ExponentialFamily.sufficientstatistics(distribution, sample),
+            ExponentialFamily.sufficientstatistics(current_ef, sample),
         )
 
         @inbounds logpdf = state.logpdfs[i]
@@ -201,7 +204,6 @@ end
 
 function compute_cost(
     M::AbstractManifold,
-    obj::ProjectionCostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     η,
@@ -215,7 +217,6 @@ end
 
 function compute_gradient!(
     M::AbstractManifold,
-    obj::ProjectionCostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     X,
@@ -224,12 +225,11 @@ function compute_gradient!(
     gradlogpartition,
     inv_fisher,
 )
-    buffer = get_buffer(obj)
+    buffer = get_buffer(strategy)
     if isnothing(buffer)
         return control_variate_compute_gradient!(
             strategy,
             state,
-            obj,
             X,
             η,
             logpartition,
@@ -240,7 +240,6 @@ function compute_gradient!(
         return control_variate_compute_gradient_buffered!(
             strategy,
             state,
-            obj,
             X,
             η,
             logpartition,
@@ -253,7 +252,6 @@ end
 function control_variate_compute_gradient!(
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
-    obj::ProjectionCostGradientObjective,
     X,
     η,
     logpartition,
@@ -276,7 +274,6 @@ end
 function control_variate_compute_gradient_buffered!(
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
-    obj::ProjectionCostGradientObjective,
     X,
     η,
     logpartition,
@@ -287,7 +284,7 @@ function control_variate_compute_gradient_buffered!(
     # The `@no_escape` macro simplifies writing non-allocating code, it allows 
     # to create intermediate buffers which will be freed immediatelly upon exiting the block 
     # uses the buffer from `get_buffer(obj)` so buffer must be relatively big
-    buffer = get_buffer(obj)
+    buffer = get_buffer(strategy)
     @no_escape buffer begin
 
         # First we compute the `cov` between `state.sufficientstatistics'` and `state.gradsamples'`
