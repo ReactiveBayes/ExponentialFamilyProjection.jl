@@ -64,8 +64,8 @@ function create_state!(
     strategy::ControlVariateStrategy,
     M::AbstractManifold,
     parameters::ProjectionParameters,
-    projection_argument::InplaceLogpdf,
-    distribution,
+    projection_argument,
+    initial_ef,
     supplementary_η,
 )
 
@@ -73,14 +73,13 @@ function create_state!(
     # we simply create new containers for the samples, logpdfs, etc.
     nsamples = getnsamples(strategy)
     rng = getrng(parameters)
-    samples = prepare_samples_container(rng, distribution, nsamples, supplementary_η)
-    logpdfs = prepare_logpdfs_container(rng, distribution, nsamples, supplementary_η)
+    samples = prepare_samples_container(rng, initial_ef, nsamples, supplementary_η)
+    logpdfs = prepare_logpdfs_container(rng, initial_ef, nsamples, supplementary_η)
     logbasemeasures =
-        prepare_logbasemeasures_container(rng, distribution, nsamples, supplementary_η)
+        prepare_logbasemeasures_container(rng, initial_ef, nsamples, supplementary_η)
     sufficientstatistics =
-        prepare_sufficientstatistics_container(rng, distribution, nsamples, supplementary_η)
-    gradsamples =
-        prepare_gradsamples_container(rng, distribution, nsamples, supplementary_η)
+        prepare_sufficientstatistics_container(rng, initial_ef, nsamples, supplementary_η)
+    gradsamples = prepare_gradsamples_container(rng, initial_ef, nsamples, supplementary_η)
 
     state = ControlVariateStrategyState(
         samples = samples,
@@ -96,7 +95,7 @@ function create_state!(
         M,
         parameters,
         projection_argument,
-        distribution,
+        initial_ef,
         supplementary_η,
     )
 end
@@ -151,7 +150,7 @@ function prepare_state!(
     state::ControlVariateStrategyState,
     M::AbstractManifold,
     parameters::ProjectionParameters,
-    projection_argument::InplaceLogpdf,
+    projection_argument,
     distribution,
     supplementary_η,
 )
@@ -167,7 +166,8 @@ function prepare_state!(
     glogpartion = ExponentialFamily.gradlogpartition(distribution)
     J = size(getgradsamples(state), 1)
 
-    projection_argument(getlogpdfs(state), sample_container)
+    inplace_projection_argument = convert(BayesBase.InplaceLogpdf, projection_argument)
+    inplace_projection_argument(getlogpdfs(state), sample_container)
 
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
 
@@ -200,10 +200,10 @@ function prepare_state!(
 end
 
 function compute_cost(
+    M::AbstractManifold,
+    obj::ProjectionCostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
-    obj::ProjectionCostGradientObjective,
-    M::AbstractManifold,
     η,
     logpartition,
     gradlogpartition,
@@ -214,10 +214,10 @@ function compute_cost(
 end
 
 function compute_gradient!(
+    M::AbstractManifold,
+    obj::ProjectionCostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
-    obj::ProjectionCostGradientObjective,
-    M::AbstractManifold,
     X,
     η,
     logpartition,

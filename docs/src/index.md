@@ -45,6 +45,10 @@ ExponentialFamilyProjection.DefaultStrategy
 ExponentialFamilyProjection.ControlVariateStrategy
 ExponentialFamilyProjection.MLEStrategy
 ExponentialFamilyProjection.preprocess_strategy_argument
+ExponentialFamilyProjection.create_state!
+ExponentialFamilyProjection.prepare_state!
+ExponentialFamilyProjection.compute_cost
+ExponentialFamilyProjection.compute_gradient!
 ```
 
 For high-dimensional distributions, adjusting the default number of samples might be necessary to achieve better performance.

@@ -37,7 +37,7 @@
             d = size(mean(ef))
             c = getconditioner(ef)
             M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
-            arg = convert(BayesBase.InplaceLogpdf, (x) -> 1)
+            arg = (x) -> 1
             state1 = create_state!(ControlVariateStrategy(), M, parameters, arg, ef, ())
             state2 = create_state!(ControlVariateStrategy(), M, parameters, arg, ef, ())
             @test state1 == state2
@@ -85,11 +85,17 @@ end
 
     for dist in dists
 
-        targetfn = BayesBase.InplaceLogpdf(let dist = dist
+        targetfn1 = let dist = dist
+            (x) -> logpdf(dist, x)
+        end
+
+        targetfn2 = BayesBase.InplaceLogpdf(let dist = dist
             (out, x) -> logpdf(dist, x)
         end)
 
-        for nsamples in (100, 200), supplementary in ((), (dist,))
+        for targetfn in [targetfn1, targetfn2],
+            nsamples in (100, 200),
+            supplementary in ((), (dist,))
 
             ef = convert(ExponentialFamilyDistribution, dist)
             T = ExponentialFamily.exponential_family_typetag(ef)
@@ -226,8 +232,8 @@ end
     using StableRNGs, ExponentialFamily, Manifolds, BayesBase
 
     dist = Beta(4, 6)
-    targetfn1 = convert(BayesBase.InplaceLogpdf, (x) -> logpdf(dist, x))
-    targetfn2 = convert(BayesBase.InplaceLogpdf, (x) -> logpdf(dist, x) - 1000)
+    targetfn1 = (x) -> logpdf(dist, x)
+    targetfn2 = (x) -> logpdf(dist, x) - 1000
 
     strategy = ControlVariateStrategy(nsamples = 10^6)
     parameters = ProjectionParameters()
@@ -310,9 +316,8 @@ end
                 ExponentialFamilyManifolds.get_natural_manifold(typetag, dims, nothing)
 
 
-            targetfn_part = convert(BayesBase.InplaceLogpdf, (x) -> logpdf(left, x))
-            targetfn_full =
-                convert(BayesBase.InplaceLogpdf, (x) -> logpdf(ProductOf(left, right), x))
+            targetfn_part = (x) -> logpdf(left, x)
+            targetfn_full = (x) -> logpdf(ProductOf(left, right), x)
             ef = convert(ExponentialFamilyDistribution, right)
             supplementary_ef =
                 [getnaturalparameters(convert(ExponentialFamilyDistribution, right))]

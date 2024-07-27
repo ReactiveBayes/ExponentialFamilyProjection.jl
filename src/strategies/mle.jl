@@ -43,15 +43,15 @@ function create_state!(
     M::AbstractManifold,
     parameters::ProjectionParameters,
     samples::AbstractArray,
-    distribution,
+    initial_ef,
     supplementary_η,
 )
-    _, sample_container = ExponentialFamily.check_logpdf(distribution, samples)
+    _, sample_container = ExponentialFamily.check_logpdf(initial_ef, samples)
 
     # Our samples are fixed, thus we can precompute all the `sufficientstatistics` once
     sufficientstatistics = zeros(
-        paramfloattype(distribution),
-        length(getnaturalparameters(distribution)),
+        paramfloattype(initial_ef),
+        length(getnaturalparameters(initial_ef)),
         length(samples),
     )
 
@@ -59,7 +59,7 @@ function create_state!(
 
     foreach(enumerate(sample_container)) do (i, sample)
         sample_sufficientstatistics = __projection_fast_pack_parameters(
-            ExponentialFamily.sufficientstatistics(distribution, sample),
+            ExponentialFamily.sufficientstatistics(initial_ef, sample),
         )
         @turbo warn_check_args = false for j = 1:J
             @inbounds sufficientstatistics[j, i] = sample_sufficientstatistics[j]
@@ -67,8 +67,8 @@ function create_state!(
     end
 
     targetfn = MLETargetFn(M, samples, sufficientstatistics)
-    config = ForwardDiff.GradientConfig(targetfn, getnaturalparameters(distribution))
-    tmpgrad = ForwardDiff.gradient(targetfn, getnaturalparameters(distribution), config)
+    config = ForwardDiff.GradientConfig(targetfn, getnaturalparameters(initial_ef))
+    tmpgrad = ForwardDiff.gradient(targetfn, getnaturalparameters(initial_ef), config)
     return MLEStrategyState(targetfn, config, tmpgrad)
 end
 
@@ -108,10 +108,10 @@ function (fn::MLETargetFn)(η)
 end
 
 function compute_cost(
+    M::AbstractManifold,
+    obj::ProjectionCostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
-    obj::ProjectionCostGradientObjective,
-    M::AbstractManifold,
     η,
     _,
     _,
@@ -121,10 +121,10 @@ function compute_cost(
 end
 
 function compute_gradient!(
+    M::AbstractManifold,
+    obj::ProjectionCostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
-    obj::ProjectionCostGradientObjective,
-    M::AbstractManifold,
     X,
     η,
     _,

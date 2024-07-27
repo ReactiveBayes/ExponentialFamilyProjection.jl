@@ -33,7 +33,7 @@ get_strategy_state(obj::ProjectionCostGradientObjective) = obj.strategy_state
 get_buffer(obj::ProjectionCostGradientObjective) = obj.buffer
 
 function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
-    ef = convert(ExponentialFamilyDistribution, M, p)
+    current_ef = convert(ExponentialFamilyDistribution, M, p)
 
     strategy = get_strategy(objective)
     state = get_strategy_state(objective)
@@ -47,14 +47,14 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
         M,
         projection_parameters,
         projection_argument,
-        ef,
+        current_ef,
         supplementary_η,
     )
 
-    logpartition = ExponentialFamily.logpartition(ef)
-    gradlogpartition = ExponentialFamily.gradlogpartition(ef)
-    inv_fisher = cholinv(ExponentialFamily.fisherinformation(ef))
-    η = copy(ExponentialFamily.getnaturalparameters(ef))
+    logpartition = ExponentialFamily.logpartition(current_ef)
+    gradlogpartition = ExponentialFamily.gradlogpartition(current_ef)
+    inv_fisher = cholinv(ExponentialFamily.fisherinformation(current_ef))
+    η = copy(ExponentialFamily.getnaturalparameters(current_ef))
 
     # If we have some supplementary natural parameters in the objective 
     # we must subtract them from the natural parameters of the current η
@@ -63,20 +63,20 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
     end
 
     c = compute_cost(
+        M,
+        objective,
         strategy,
         state,
-        objective,
-        M,
         η,
         logpartition,
         gradlogpartition,
         inv_fisher,
     )
     X = compute_gradient!(
+        M,
+        objective,
         strategy,
         state,
-        objective,
-        M,
         X,
         η,
         logpartition,
