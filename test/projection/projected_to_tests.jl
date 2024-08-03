@@ -497,3 +497,28 @@ end
     @test_logs match_mode = :all project_to(prj, targetfn, debug = [])
     
 end
+
+@testitem "Direction rule effect comparison for MLE" begin 
+    using BayesBase, ExponentialFamily, Distributions, JET
+    using ExponentialFamilyProjection, StableRNGs
+
+    true_dist = (Beta(1, 1), Gamma(10, 20), Bernoulli(0.8), NormalMeanVariance(-10, 0.1), Poisson(4.8))
+    for dist in true_dist
+        data = rand(StableRNG(42), dist, 100)
+        divergences = []
+        for norm in (0.0:0.01:1.0)
+            parameters = ProjectionParameters(
+                direction = ExponentialFamilyProjection.BoundedNormUpdateRule(norm)
+            )
+            projection = ProjectedTo(ExponentialFamily.exponential_family_typetag.(dist), ()..., parameters = parameters)
+            approximated = project_to(projection, data)
+            push!(divergences, kldivergence(approximated, dist))
+        end
+        
+        Δdivergences =  divergences[1:end-1] - divergences[2:end]
+        for i = 1 : length(Δdivergences) - 1
+            @test Δdivergences[i] ≠ Δdivergences[i + 1]
+        end
+    end
+
+end
