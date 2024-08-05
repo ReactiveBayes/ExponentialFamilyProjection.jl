@@ -129,6 +129,16 @@ getstepsize(parameters::ProjectionParameters) = parameters.stepsize
 getseed(parameters::ProjectionParameters) = parameters.seed
 getrng(parameters::ProjectionParameters) = parameters.rng
 
+"""
+    getinitialpoint(strategy, M::AbstractManifold, parameters::ProjectionParameters)
+
+Returns an initial point to start optimization from. By default returns a `rand` point from `M`, 
+but different strategies may implement their own methods.
+"""
+function getinitialpoint(::Any, M::AbstractManifold, parameters::ProjectionParameters)
+    return rand(getrng(parameters), M)
+end
+
 function Manopt.get_stopping_criterion(parameters::ProjectionParameters)
     return Manopt.get_stopping_criterion(
         parameters::ProjectionParameters,

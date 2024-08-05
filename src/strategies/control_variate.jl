@@ -27,14 +27,6 @@ function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
     return get_nsamples(a) == get_nsamples(b) && get_buffer(a) == get_buffer(b)
 end
 
-function getinitialpoint(
-    ::ControlVariateStrategy,
-    M::AbstractManifold,
-    parameters::ProjectionParameters,
-)
-    return rand(getrng(parameters), M)
-end
-
 preprocess_strategy_argument(strategy::ControlVariateStrategy, argument::Any) =
     (strategy, convert(InplaceLogpdf, argument))
 preprocess_strategy_argument(::ControlVariateStrategy, argument::AbstractArray) = error(

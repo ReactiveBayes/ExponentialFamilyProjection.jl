@@ -10,14 +10,6 @@ A strategy for gradient descent optimization and gradients computations that res
 """
 struct MLEStrategy end
 
-function getinitialpoint(
-    ::MLEStrategy,
-    M::AbstractManifold,
-    parameters::ProjectionParameters,
-)
-    return rand(getrng(parameters), M)
-end
-
 preprocess_strategy_argument(strategy::MLEStrategy, argument::AbstractArray) =
     (strategy, argument)
 preprocess_strategy_argument(::MLEStrategy, argument::Any) = error(

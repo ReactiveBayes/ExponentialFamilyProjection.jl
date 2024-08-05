@@ -13,6 +13,7 @@ In order to project a log probability density function onto a member of the expo
 ```@docs
 ExponentialFamilyProjection.ProjectionParameters
 ExponentialFamilyProjection.DefaultProjectionParameters
+ExponentialFamilyProjection.getinitialpoint
 ```
 
 Read more about different optimization strategies [here](@ref opt-strategies).
