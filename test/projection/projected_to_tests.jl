@@ -498,27 +498,85 @@ end
     
 end
 
-@testitem "Direction rule effect comparison for MLE" begin 
-    using BayesBase, ExponentialFamily, Distributions, JET
+@testitem "Direction rule can improve for MLE" begin 
+    using BayesBase, ExponentialFamily, Distributions
     using ExponentialFamilyProjection, StableRNGs
 
-    true_dist = (Beta(1, 1), Gamma(10, 20), Bernoulli(0.8), NormalMeanVariance(-10, 0.1), Poisson(4.8))
-    for dist in true_dist
-        data = rand(StableRNG(42), dist, 100)
-        divergences = []
-        for norm in (0.0:0.01:1.0)
+    dists = (Beta(1, 1), Gamma(10, 20), Bernoulli(0.8), NormalMeanVariance(-10, 0.1), Poisson(4.8))
+    
+    for dist in dists
+        rng = StableRNG(42)
+        data = rand(rng, dist, 4000)
+        
+        norm_bounds = [0.01, 0.1, 10.0]
+        
+        divergences = map(norm_bounds) do norm
             parameters = ProjectionParameters(
                 direction = ExponentialFamilyProjection.BoundedNormUpdateRule(norm)
             )
-            projection = ProjectedTo(ExponentialFamily.exponential_family_typetag.(dist), ()..., parameters = parameters)
+            projection = ProjectedTo(ExponentialFamily.exponential_family_typetag(dist), ()..., parameters = parameters)
             approximated = project_to(projection, data)
-            push!(divergences, kldivergence(approximated, dist))
+            kldivergence(approximated, dist)
+        end
+
+        @testset "true dist $(dist)" begin
+            @test issorted(divergences, rev=true)
+            @test (divergences[1] - divergences[end]) / divergences[1] > 0.05
         end
         
-        Δdivergences =  divergences[1:end-1] - divergences[2:end]
-        for i = 1 : length(Δdivergences) - 1
-            @test Δdivergences[i] ≠ Δdivergences[i + 1]
-        end
     end
+end
 
+@testitem "MomentumGradient direction update rule on logpdf" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+
+    true_dist = MvNormal([1.0, 2.0], [1.0 0.7; 0.7 2.0])
+    logp = (x) -> logpdf(true_dist, x)
+
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(MvNormalMeanCovariance, (2,), nothing)
+    initialpoint = rand(manifold)
+    direction = MomentumGradient(manifold, initialpoint)
+
+    momentum_parameters = ProjectionParameters(
+        direction = direction,
+        niterations = 1000,
+        tolerance = 1e-8
+    )
+
+    projection = ProjectedTo(MvNormalMeanCovariance, 2, parameters=momentum_parameters)
+    
+    approximated = project_to(projection, logp, initialpoint = initialpoint)
+    
+    @test approximated isa MvNormalMeanCovariance
+    @test kldivergence(approximated, true_dist) < 0.01
+    @test projection.parameters.direction isa MomentumGradient
+end
+
+@testitem "MomentumGradient direction update rule on samples" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+    true_dist = MvNormal([1.0, 2.0], [1.0 0.7; 0.7 2.0])
+    rng = StableRNG(42)
+    samples = rand(rng, true_dist, 1000)
+    
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(MvNormalMeanCovariance, (2,), nothing)
+    
+    initialpoint = rand(rng, manifold)
+    direction = MomentumGradient(manifold, initialpoint)
+    
+    momentum_parameters = ProjectionParameters(
+        direction = direction,
+        niterations = 1000,
+        tolerance = 1e-8
+    )
+    
+    projection = ProjectedTo(MvNormalMeanCovariance, 2, parameters=momentum_parameters)
+    approximated = project_to(projection, samples, initialpoint = initialpoint)
+    
+    @test approximated isa MvNormalMeanCovariance
+    @test kldivergence(approximated, true_dist) < 0.01  # Ensure good approximation
+    @test projection.parameters.direction isa MomentumGradient
 end
