@@ -105,14 +105,16 @@ The following parameters are available:
 * `stepsize = ConstantStepsize(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
 * `seed`: Optional; Seed for the `rng`
 * `rng`: Optional; Random number generator
+* `direction = BoundedNormUpdateRule(static(1.0)`: Direction update rule. Accepts `Manopt.DirectionUpdateRule` from `Manopt.jl`.
 """
-Base.@kwdef struct ProjectionParameters{S,I,T,P,D,N}
+Base.@kwdef struct ProjectionParameters{S,I,T,P,D,N,U}
     strategy::S = DefaultStrategy()
     niterations::I = 100
     tolerance::T = 1e-6
     stepsize::P = ConstantStepsize(0.1)
     seed::D = 42
     rng::N = StableRNG(seed)
+    direction::U = BoundedNormUpdateRule(static(1.0))
 end
 
 """
@@ -128,6 +130,7 @@ gettolerance(parameters::ProjectionParameters) = parameters.tolerance
 getstepsize(parameters::ProjectionParameters) = parameters.stepsize
 getseed(parameters::ProjectionParameters) = parameters.seed
 getrng(parameters::ProjectionParameters) = parameters.rng
+getdirection(parameters::ProjectionParameters) = parameters.direction
 
 """
     getinitialpoint(strategy, M::AbstractManifold, parameters::ProjectionParameters)
@@ -314,7 +317,7 @@ function _kernel_project_to(
         current_η;
         stopping_criterion = get_stopping_criterion(projection_parameters),
         stepsize = getstepsize(projection_parameters),
-        direction = BoundedNormUpdateRule(static(1)),
+        direction = getdirection(parameters),
         kwargs...,
     )
 
