@@ -102,11 +102,11 @@ function test_convergence_nsamples(
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
                 nsamples = nsamples,
-                seed = rand(nsamples_rng, UInt),
             ),
             niterations = nsamples_niterations,
             tolerance = nsamples_tolerance,
             stepsize = nsamples_stepsize,
+            seed = rand(nsamples_rng, UInt),
         )
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
@@ -177,11 +177,11 @@ function test_convergence_niterations(
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
                 nsamples = niterations_nsamples,
-                seed = rand(niterations_rng, UInt),
             ),
             niterations = niterations,
             tolerance = niterations_tolerance,
             stepsize = niterations_stepsize,
+            seed = rand(niterations_rng, UInt),
         )
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
@@ -226,12 +226,11 @@ function test_convergence_niterations_mle(
     experiment = map(niterations_range) do niterations
         data = rand(niterations_rng, distribution, niterations_nsamples)
         parameters = ProjectionParameters(
-            strategy = ExponentialFamilyProjection.MLEStrategy(
-                seed = rand(niterations_rng, UInt),
-            ),
+            strategy = ExponentialFamilyProjection.MLEStrategy(),
             niterations = niterations,
             tolerance = niterations_tolerance,
             stepsize = niterations_stepsize,
+            seed = rand(niterations_rng, UInt),
         )
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
@@ -276,12 +275,11 @@ function test_convergence_nsamples_mle(
     experiment = map(nsamples_range) do nsamples
         data = rand(nsamples_rng, distribution, nsamples)
         parameters = ProjectionParameters(
-            strategy = ExponentialFamilyProjection.MLEStrategy(
-                seed = rand(nsamples_rng, UInt),
-            ),
+            strategy = ExponentialFamilyProjection.MLEStrategy(),
             niterations = nsamples_niterations,
             tolerance = nsamples_tolerance,
             stepsize = nsamples_stepsize,
+            seed = rand(nsamples_rng, UInt),
         )
 
         projection =

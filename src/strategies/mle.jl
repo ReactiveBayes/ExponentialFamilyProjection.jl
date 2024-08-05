@@ -1,60 +1,20 @@
 using ForwardDiff, LoopVectorization
 
 """
-    MLEStrategy(; kwargs...)
+    MLEStrategy()
 
 A strategy for gradient descent optimization and gradients computations that resembles MLE estimation.
-
-The following parameters are available:
-* `seed = 42`: The seed for the random number generator
-* `rng = StableRNG(seed)`: The random number generator 
 
 !!! note
     This strategy requires a collection of samples as an argument for `project_to` and cannot project a function. Use `ControlVariateStrategy` to project a function.
 """
-Base.@kwdef struct MLEStrategy{D,N,T}
-    seed::D = 42
-    rng::N = StableRNG(seed)
-    state::T = nothing
-end
+struct MLEStrategy end
 
-getseed(strategy::MLEStrategy) = strategy.seed
-getrng(strategy::MLEStrategy) = strategy.rng
-getstate(strategy::MLEStrategy) = strategy.state
-
-function Base.:(==)(a::MLEStrategy, b::MLEStrategy)::Bool
-    return getseed(a) == getseed(b) && getrng(a) == getrng(b) && getstate(a) == getstate(b)
-end
-
-function getinitialpoint(strategy::MLEStrategy, M::AbstractManifold)
-    return rand(getrng(strategy), M)
-end
-
-function with_state(strategy::MLEStrategy, state)
-    return MLEStrategy(seed = getseed(strategy), rng = getrng(strategy), state = state)
-end
-
-preprocess_strategy_argument(strategy::MLEStrategy, argument::AbstractArray) = strategy
+preprocess_strategy_argument(strategy::MLEStrategy, argument::AbstractArray) =
+    (strategy, argument)
 preprocess_strategy_argument(::MLEStrategy, argument::Any) = error(
     lazy"`MLEStrategy` requires the projection argument to be an array of samples. Got `$(typeof(argument))` instead.",
 )
-
-function prepare_state!(
-    M::AbstractManifold,
-    strategy::MLEStrategy,
-    projection_argument::S,
-    distribution,
-    supplementary_η,
-) where {S}
-    return prepare_state!(
-        M,
-        getstate(strategy),
-        strategy,
-        projection_argument,
-        distribution,
-        supplementary_η,
-    )
-end
 
 Base.@kwdef struct MLEStrategyState{F,C,G}
     targetfn::F
@@ -70,20 +30,20 @@ gettargetfn(state::MLEStrategyState) = state.targetfn
 getconfig(state::MLEStrategyState) = state.config
 gettmpgrad(state::MLEStrategyState) = state.tmpgrad
 
-function prepare_state!(
-    M::AbstractManifold,
-    ::Nothing,
+function create_state!(
     strategy::MLEStrategy,
-    samples,
-    distribution,
+    M::AbstractManifold,
+    parameters::ProjectionParameters,
+    samples::AbstractArray,
+    initial_ef,
     supplementary_η,
 )
-    _, sample_container = ExponentialFamily.check_logpdf(distribution, samples)
+    _, sample_container = ExponentialFamily.check_logpdf(initial_ef, samples)
 
     # Our samples are fixed, thus we can precompute all the `sufficientstatistics` once
     sufficientstatistics = zeros(
-        paramfloattype(distribution),
-        length(getnaturalparameters(distribution)),
+        paramfloattype(initial_ef),
+        length(getnaturalparameters(initial_ef)),
         length(samples),
     )
 
@@ -91,7 +51,7 @@ function prepare_state!(
 
     foreach(enumerate(sample_container)) do (i, sample)
         sample_sufficientstatistics = __projection_fast_pack_parameters(
-            ExponentialFamily.sufficientstatistics(distribution, sample),
+            ExponentialFamily.sufficientstatistics(initial_ef, sample),
         )
         @turbo warn_check_args = false for j = 1:J
             @inbounds sufficientstatistics[j, i] = sample_sufficientstatistics[j]
@@ -99,17 +59,18 @@ function prepare_state!(
     end
 
     targetfn = MLETargetFn(M, samples, sufficientstatistics)
-    config = ForwardDiff.GradientConfig(targetfn, getnaturalparameters(distribution))
-    tmpgrad = ForwardDiff.gradient(targetfn, getnaturalparameters(distribution), config)
+    config = ForwardDiff.GradientConfig(targetfn, getnaturalparameters(initial_ef))
+    tmpgrad = ForwardDiff.gradient(targetfn, getnaturalparameters(initial_ef), config)
     return MLEStrategyState(targetfn, config, tmpgrad)
 end
 
 function prepare_state!(
-    M::AbstractManifold,
-    state::MLEStrategyState,
     strategy::MLEStrategy,
-    samples,
-    distribution,
+    state::MLEStrategyState,
+    M::AbstractManifold,
+    parameters::ProjectionParameters,
+    samples::AbstractArray,
+    current_ef,
     supplementary_η,
 )
     return state
@@ -140,7 +101,6 @@ end
 
 function compute_cost(
     M::AbstractManifold,
-    obj::CVICostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
     η,
@@ -153,7 +113,6 @@ end
 
 function compute_gradient!(
     M::AbstractManifold,
-    obj::CVICostGradientObjective,
     strategy::MLEStrategy,
     state::MLEStrategyState,
     X,

@@ -1,5 +1,6 @@
-using StableRNGs, LoopVectorization, Bumper, FillArrays
+using StableRNGs, LoopVectorization, Bumper, FillArrays, StaticTools
 
+import Random: AbstractRNG
 import BayesBase: InplaceLogpdf
 
 """
@@ -9,65 +10,28 @@ A strategy for gradient descent optimization and gradients computations that res
 
 The following parameters are available:
 * `nsamples = 2000`: The number of samples to use for estimates
-* `seed = 42`: The seed for the random number generator
-* `rng = StableRNG(seed)`: The random number generator
+* `buffer = StaticTools.MallocSlabBuffer()`: Advanced option; A buffer for temporary computations
 
 !!! note
     This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
-Base.@kwdef struct ControlVariateStrategy{S,D,N,T}
+Base.@kwdef struct ControlVariateStrategy{S,B}
     nsamples::S = 2000
-    seed::D = 42
-    rng::N = StableRNG(seed)
-    state::T = nothing
+    buffer::B = StaticTools.MallocSlabBuffer()
 end
 
-getnsamples(strategy::ControlVariateStrategy) = strategy.nsamples
-getseed(strategy::ControlVariateStrategy) = strategy.seed
-getrng(strategy::ControlVariateStrategy) = strategy.rng
-getstate(strategy::ControlVariateStrategy) = strategy.state
+get_nsamples(strategy::ControlVariateStrategy) = strategy.nsamples
+get_buffer(strategy::ControlVariateStrategy) = strategy.buffer
 
 function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
-    return getnsamples(a) == getnsamples(b) &&
-           getseed(a) == getseed(b) &&
-           getrng(a) == getrng(b) &&
-           getstate(a) == getstate(b)
+    return get_nsamples(a) == get_nsamples(b) && get_buffer(a) == get_buffer(b)
 end
 
-function getinitialpoint(strategy::ControlVariateStrategy, M::AbstractManifold)
-    return rand(getrng(strategy), M)
-end
-
-function with_state(strategy::ControlVariateStrategy, state)
-    return ControlVariateStrategy(
-        nsamples = getnsamples(strategy),
-        seed = getseed(strategy),
-        rng = getrng(strategy),
-        state = state,
-    )
-end
-
-preprocess_strategy_argument(strategy::ControlVariateStrategy, argument::Any) = strategy
+preprocess_strategy_argument(strategy::ControlVariateStrategy, argument::Any) =
+    (strategy, convert(InplaceLogpdf, argument))
 preprocess_strategy_argument(::ControlVariateStrategy, argument::AbstractArray) = error(
     lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(argument))` instead.",
 )
-
-function prepare_state!(
-    M::AbstractManifold,
-    strategy::ControlVariateStrategy,
-    projection_argument::F,
-    distribution,
-    supplementary_η,
-) where {F}
-    return prepare_state!(
-        M,
-        getstate(strategy),
-        strategy,
-        convert(InplaceLogpdf, projection_argument),
-        distribution,
-        supplementary_η,
-    )
-end
 
 Base.@kwdef struct ControlVariateStrategyState{M,L,LB,F,G}
     samples::M
@@ -85,33 +49,32 @@ function Base.:(==)(a::ControlVariateStrategyState, b::ControlVariateStrategySta
            a.gradsamples == b.gradsamples
 end
 
-getsamples(state::ControlVariateStrategyState) = state.samples
-getlogpdfs(state::ControlVariateStrategyState) = state.logpdfs
-getlogbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
-getsufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
-getgradsamples(state::ControlVariateStrategyState) = state.gradsamples
+get_samples(state::ControlVariateStrategyState) = state.samples
+get_logpdfs(state::ControlVariateStrategyState) = state.logpdfs
+get_logbasemeasures(state::ControlVariateStrategyState) = state.logbasemeasures
+get_sufficientstatistics(state::ControlVariateStrategyState) = state.sufficientstatistics
+get_gradsamples(state::ControlVariateStrategyState) = state.gradsamples
 
-function prepare_state!(
-    M::AbstractManifold,
-    ::Nothing,
+function create_state!(
     strategy::ControlVariateStrategy,
-    projection_argument::InplaceLogpdf,
-    distribution,
+    M::AbstractManifold,
+    parameters::ProjectionParameters,
+    projection_argument,
+    initial_ef,
     supplementary_η,
 )
 
     # If the `state` saved in `ControlVariateStrategy` is `nothing`
     # we simply create new containers for the samples, logpdfs, etc.
-    nsamples = getnsamples(strategy)
-    rng = getrng(strategy)
-    samples = prepare_samples_container(rng, distribution, nsamples, supplementary_η)
-    logpdfs = prepare_logpdfs_container(rng, distribution, nsamples, supplementary_η)
+    nsamples = get_nsamples(strategy)
+    rng = getrng(parameters)
+    samples = prepare_samples_container(rng, initial_ef, nsamples, supplementary_η)
+    logpdfs = prepare_logpdfs_container(rng, initial_ef, nsamples, supplementary_η)
     logbasemeasures =
-        prepare_logbasemeasures_container(rng, distribution, nsamples, supplementary_η)
+        prepare_logbasemeasures_container(rng, initial_ef, nsamples, supplementary_η)
     sufficientstatistics =
-        prepare_sufficientstatistics_container(rng, distribution, nsamples, supplementary_η)
-    gradsamples =
-        prepare_gradsamples_container(rng, distribution, nsamples, supplementary_η)
+        prepare_sufficientstatistics_container(rng, initial_ef, nsamples, supplementary_η)
+    gradsamples = prepare_gradsamples_container(rng, initial_ef, nsamples, supplementary_η)
 
     state = ControlVariateStrategyState(
         samples = samples,
@@ -122,11 +85,12 @@ function prepare_state!(
     )
 
     return prepare_state!(
-        M,
-        state,
         strategy,
+        state,
+        M,
+        parameters,
         projection_argument,
-        distribution,
+        initial_ef,
         supplementary_η,
     )
 end
@@ -177,31 +141,33 @@ prepare_logbasemeasures_container(
 ) = zeros(paramfloattype(distribution), nsamples)
 
 function prepare_state!(
-    M::AbstractManifold,
-    state::ControlVariateStrategyState,
     strategy::ControlVariateStrategy,
-    projection_argument::InplaceLogpdf,
-    distribution,
+    state::ControlVariateStrategyState,
+    M::AbstractManifold,
+    parameters::ProjectionParameters,
+    projection_argument,
+    current_ef,
     supplementary_η,
 )
 
     # We need to reset the RNG state every time we prepare the state
     # This is important not only for reproducibility, but also to ensure
     # that the gradient computation is stable
-    Random.seed!(getrng(strategy), getseed(strategy))
-    Random.rand!(getrng(strategy), distribution, state.samples)
+    Random.seed!(getrng(parameters), getseed(parameters))
+    Random.rand!(getrng(parameters), current_ef, get_samples(state))
 
-    _, sample_container = ExponentialFamily.check_logpdf(distribution, state.samples)
+    _, sample_container = ExponentialFamily.check_logpdf(current_ef, get_samples(state))
 
-    glogpartion = ExponentialFamily.gradlogpartition(distribution)
-    J = size(state.gradsamples, 1)
+    glogpartion = ExponentialFamily.gradlogpartition(current_ef)
+    J = size(get_gradsamples(state), 1)
 
-    projection_argument(state.logpdfs, sample_container)
+    inplace_projection_argument = convert(BayesBase.InplaceLogpdf, projection_argument)
+    inplace_projection_argument(get_logpdfs(state), sample_container)
 
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
 
     nonconstantbasemeasure =
-        ExponentialFamily.isbasemeasureconstant(distribution) === NonConstantBaseMeasure()
+        ExponentialFamily.isbasemeasureconstant(current_ef) === NonConstantBaseMeasure()
 
     foreach(enumerate(sample_container)) do (i, sample)
         # if `basemeasure` is constant we assume that 
@@ -209,11 +175,11 @@ function prepare_state!(
         if nonconstantbasemeasure
             @inbounds state.logbasemeasures[i] =
                 one_minus_n_of_supplementary *
-                ExponentialFamily.logbasemeasure(distribution, sample)
+                ExponentialFamily.logbasemeasure(current_ef, sample)
         end
 
         sufficientstatistics = __projection_fast_pack_parameters(
-            ExponentialFamily.sufficientstatistics(distribution, sample),
+            ExponentialFamily.sufficientstatistics(current_ef, sample),
         )
 
         @inbounds logpdf = state.logpdfs[i]
@@ -230,7 +196,6 @@ end
 
 function compute_cost(
     M::AbstractManifold,
-    obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     η,
@@ -244,7 +209,6 @@ end
 
 function compute_gradient!(
     M::AbstractManifold,
-    obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     X,
@@ -253,10 +217,9 @@ function compute_gradient!(
     gradlogpartition,
     inv_fisher,
 )
-    buffer = get_cvi_buffer(obj)
+    buffer = get_buffer(strategy)
     if isnothing(buffer)
         return control_variate_compute_gradient!(
-            obj,
             strategy,
             state,
             X,
@@ -267,7 +230,6 @@ function compute_gradient!(
         )
     else
         return control_variate_compute_gradient_buffered!(
-            obj,
             strategy,
             state,
             X,
@@ -280,7 +242,6 @@ function compute_gradient!(
 end
 
 function control_variate_compute_gradient!(
-    obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     X,
@@ -303,7 +264,6 @@ function control_variate_compute_gradient!(
 end
 
 function control_variate_compute_gradient_buffered!(
-    obj::CVICostGradientObjective,
     strategy::ControlVariateStrategy,
     state::ControlVariateStrategyState,
     X,
@@ -315,8 +275,8 @@ function control_variate_compute_gradient_buffered!(
     # This code is a bit involved, more comments are added
     # The `@no_escape` macro simplifies writing non-allocating code, it allows 
     # to create intermediate buffers which will be freed immediatelly upon exiting the block 
-    # uses the buffer from `get_cvi_buffer(obj)` so buffer must be relatively big
-    buffer = get_cvi_buffer(obj)
+    # uses the buffer from `get_buffer(obj)` so buffer must be relatively big
+    buffer = get_buffer(strategy)
     @no_escape buffer begin
 
         # First we compute the `cov` between `state.sufficientstatistics'` and `state.gradsamples'`
