@@ -103,13 +103,15 @@ The following parameters are available:
 * `niterations = 100`: The number of iterations for the optimization procedure.
 * `tolerance = 1e-6`: The tolerance for the norm of the gradient.
 * `stepsize = ConstantStepsize(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
+* `direction = BoundedNormUpdateRule(static(1.0)`: Direction update rule. Accepts `Manopt.DirectionUpdateRule` from `Manopt.jl`.
 * `usebuffer = Val(true)`: Whether to use a buffer for the projection. Must be either `Val(true)` or `Val(false)`. Disabling buffer can be useful for debugging purposes.
 """
-Base.@kwdef struct ProjectionParameters{S,I,T,P,B}
+Base.@kwdef struct ProjectionParameters{S,I,T,P,D,B}
     strategy::S = DefaultStrategy()
     niterations::I = 100
     tolerance::T = 1e-6
     stepsize::P = ConstantStepsize(0.1)
+    direction::D = BoundedNormUpdateRule(static(1.0))
     usebuffer::B = Val(true)
 end
 
@@ -124,6 +126,7 @@ getstrategy(parameters::ProjectionParameters) = parameters.strategy
 getniterations(parameters::ProjectionParameters) = parameters.niterations
 gettolerance(parameters::ProjectionParameters) = parameters.tolerance
 getstepsize(parameters::ProjectionParameters) = parameters.stepsize
+getdirection(parameters::ProjectionParameters) = parameters.direction
 
 with_buffer(f::F, parameters::ProjectionParameters) where {F} =
     with_buffer(f, parameters.usebuffer, parameters)
@@ -292,7 +295,7 @@ function _kernel_project_to(
         p;
         stopping_criterion = get_stopping_criterion(parameters),
         stepsize = getstepsize(parameters),
-        direction = BoundedNormUpdateRule(static(1)),
+        direction = getdirection(parameters),
         kwargs...,
     )
 
