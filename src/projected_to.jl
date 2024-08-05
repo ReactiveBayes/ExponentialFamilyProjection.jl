@@ -317,7 +317,7 @@ function _kernel_project_to(
         current_η;
         stopping_criterion = get_stopping_criterion(projection_parameters),
         stepsize = getstepsize(projection_parameters),
-        direction = getdirection(parameters),
+        direction = getdirection(projection_parameters),
         kwargs...,
     )
 
