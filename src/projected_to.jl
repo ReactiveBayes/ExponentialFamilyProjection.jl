@@ -33,28 +33,32 @@ julia> projected_to = ProjectedTo(Laplace, conditioner = 2.0)
 ProjectedTo(Laplace, conditioner = 2.0)
 ```
 """
-struct ProjectedTo{T,D,C,P}
+struct ProjectedTo{T,D,C,P,E}
     dims::D
     conditioner::C
     parameters::P
+    extra::E
 end
 
 ProjectedTo(
     dims::Vararg{Int};
     conditioner = nothing,
     parameters = DefaultProjectionParameters(),
+    extra = nothing,
 ) = ProjectedTo(
     ExponentialFamilyDistribution,
     dims...,
     conditioner = conditioner,
     parameters = parameters,
+    extra = extra,
 )
 function ProjectedTo(
     ::Type{T},
     dims...;
     conditioner::C = nothing,
     parameters::P = DefaultProjectionParameters(),
-) where {T,C,P}
+    extra::E = nothing,
+) where {T,C,P,E}
     # Check that `dims` are all integers
     if !all(d -> typeof(d) <: Int, dims)
         # If not, throw an error, also suggesting to use keyword arguments
@@ -65,7 +69,7 @@ function ProjectedTo(
         end
         error(msg)
     end
-    return ProjectedTo{T,typeof(dims),C,P}(dims, conditioner, parameters)
+    return ProjectedTo{T,typeof(dims),C,P,E}(dims, conditioner, parameters, extra)
 end
 
 get_projected_to_type(::ProjectedTo{T}) where {T} = T
@@ -270,7 +274,11 @@ function project_to(
 
     # We disable the default `debug` statements, which are set in `Manopt` 
     # in order to improve the performance a little bit
-    kwargs = !haskey(kwargs, :debug) ? (; kwargs..., debug = missing) : kwargs
+    if !isnothing(prj.extra)
+        kwargs =
+            !haskey(prj.extra, :debug) ? (; kwargs..., debug = missing) :
+            (; kwargs..., debug = prj.extra[:debug])
+    end
 
     return _kernel_project_to(
         get_projected_to_type(prj),
