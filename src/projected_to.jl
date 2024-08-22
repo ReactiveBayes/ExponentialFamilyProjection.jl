@@ -37,27 +37,27 @@ struct ProjectedTo{T,D,C,P,E}
     dims::D
     conditioner::C
     parameters::P
-    extra::E
+    kwargs::E
 end
 
 ProjectedTo(
     dims::Vararg{Int};
     conditioner = nothing,
     parameters = DefaultProjectionParameters(),
-    extra = nothing,
+    kwargs = nothing,
 ) = ProjectedTo(
     ExponentialFamilyDistribution,
     dims...,
     conditioner = conditioner,
     parameters = parameters,
-    extra = extra,
+    kwargs = kwargs,
 )
 function ProjectedTo(
     ::Type{T},
     dims...;
     conditioner::C = nothing,
     parameters::P = DefaultProjectionParameters(),
-    extra::E = nothing,
+    kwargs::E = nothing,
 ) where {T,C,P,E}
     # Check that `dims` are all integers
     if !all(d -> typeof(d) <: Int, dims)
@@ -69,13 +69,14 @@ function ProjectedTo(
         end
         error(msg)
     end
-    return ProjectedTo{T,typeof(dims),C,P,E}(dims, conditioner, parameters, extra)
+    return ProjectedTo{T,typeof(dims),C,P,E}(dims, conditioner, parameters, kwargs)
 end
 
 get_projected_to_type(::ProjectedTo{T}) where {T} = T
 get_projected_to_dims(prj::ProjectedTo) = prj.dims
 get_projected_to_conditioner(prj::ProjectedTo) = prj.conditioner
 get_projected_to_parameters(prj::ProjectedTo) = prj.parameters
+get_projected_to_kwargs(prj::ProjectedTo) = prj.kwargs
 get_projected_to_manifold(prj::ProjectedTo) =
     ExponentialFamilyManifolds.get_natural_manifold(
         get_projected_to_type(prj),
@@ -274,10 +275,9 @@ function project_to(
 
     # We disable the default `debug` statements, which are set in `Manopt` 
     # in order to improve the performance a little bit
-    if !isnothing(prj.extra)
-        kwargs =
-            !haskey(prj.extra, :debug) ? (; kwargs..., debug = missing) :
-            (; kwargs..., debug = prj.extra[:debug])
+    prj_kwargs = get_projected_to_kwargs(prj)
+    if !isnothing(prj_kwargs)
+        kwargs = (; kwargs, prj_kwargs...)
     end
 
     return _kernel_project_to(
