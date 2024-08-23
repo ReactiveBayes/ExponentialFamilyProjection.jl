@@ -16,6 +16,7 @@ The following arguments are optional:
 
 * `conditioner = nothing`: a conditioner to use for the projection, not all exponential family members require a conditioner, but some do, e.g. `Laplace`
 * `parameters = DefaultProjectionParameters`: parameters for the projection procedure
+* `kwargs = nothing`: Additional arguments passed to `Manopt.gradient_descent!` (optional). For details on `gradient_descent!` parameters, see the [Manopt.jl documentation](https://manoptjl.org/stable/solvers/gradient_descent/#Manopt.gradient_descent). Note, that `kwargs` passed to `project_to` take precedence over `kwargs` specified in the parameters.
 
 ```jldoctest 
 julia> using ExponentialFamily
@@ -273,11 +274,18 @@ function project_to(
         supplementary_η,
     )
 
+    # First we query the `kwargs` defined in the `ProjectionParameters`
+    prj_kwargs = get_projected_to_kwargs(prj)
+    prj_kwargs = isnothing(prj_kwargs) ? (;) : prj_kwargs
+    # And attach the `kwargs` passed to `project_to`, those may override 
+    # some settings in the `ProjectionParameters`
+    if !isnothing(kwargs)
+        prj_kwargs = (; prj_kwargs..., kwargs...)
+    end
     # We disable the default `debug` statements, which are set in `Manopt` 
     # in order to improve the performance a little bit
-    prj_kwargs = get_projected_to_kwargs(prj)
-    if !isnothing(prj_kwargs)
-        kwargs = (; kwargs, prj_kwargs...)
+    if !haskey(prj_kwargs, :debug)
+        prj_kwargs = (; prj_kwargs..., debug = missing)
     end
 
     return _kernel_project_to(
@@ -289,7 +297,7 @@ function project_to(
         strategy,
         state,
         current_η,
-        kwargs,
+        prj_kwargs,
     )
 end
 
