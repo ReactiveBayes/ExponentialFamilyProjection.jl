@@ -16,6 +16,7 @@ The following arguments are optional:
 
 * `conditioner = nothing`: a conditioner to use for the projection, not all exponential family members require a conditioner, but some do, e.g. `Laplace`
 * `parameters = DefaultProjectionParameters`: parameters for the projection procedure
+* `kwargs = nothing`: Additional arguments passed to `Manopt.gradient_descent!` (optional). For details on `gradient_descent!` parameters, see the [Manopt.jl documentation](https://manoptjl.org/stable/solvers/gradient_descent/#Manopt.gradient_descent). Note, that `kwargs` passed to `project_to` take precedence over `kwargs` specified in the parameters.
 
 ```jldoctest 
 julia> using ExponentialFamily
@@ -33,28 +34,32 @@ julia> projected_to = ProjectedTo(Laplace, conditioner = 2.0)
 ProjectedTo(Laplace, conditioner = 2.0)
 ```
 """
-struct ProjectedTo{T,D,C,P}
+struct ProjectedTo{T,D,C,P,E}
     dims::D
     conditioner::C
     parameters::P
+    kwargs::E
 end
 
 ProjectedTo(
     dims::Vararg{Int};
     conditioner = nothing,
     parameters = DefaultProjectionParameters(),
+    kwargs = nothing,
 ) = ProjectedTo(
     ExponentialFamilyDistribution,
     dims...,
     conditioner = conditioner,
     parameters = parameters,
+    kwargs = kwargs,
 )
 function ProjectedTo(
     ::Type{T},
     dims...;
     conditioner::C = nothing,
     parameters::P = DefaultProjectionParameters(),
-) where {T,C,P}
+    kwargs::E = nothing,
+) where {T,C,P,E}
     # Check that `dims` are all integers
     if !all(d -> typeof(d) <: Int, dims)
         # If not, throw an error, also suggesting to use keyword arguments
@@ -65,13 +70,14 @@ function ProjectedTo(
         end
         error(msg)
     end
-    return ProjectedTo{T,typeof(dims),C,P}(dims, conditioner, parameters)
+    return ProjectedTo{T,typeof(dims),C,P,E}(dims, conditioner, parameters, kwargs)
 end
 
 get_projected_to_type(::ProjectedTo{T}) where {T} = T
 get_projected_to_dims(prj::ProjectedTo) = prj.dims
 get_projected_to_conditioner(prj::ProjectedTo) = prj.conditioner
 get_projected_to_parameters(prj::ProjectedTo) = prj.parameters
+get_projected_to_kwargs(prj::ProjectedTo) = prj.kwargs
 get_projected_to_manifold(prj::ProjectedTo) =
     ExponentialFamilyManifolds.get_natural_manifold(
         get_projected_to_type(prj),
@@ -268,9 +274,19 @@ function project_to(
         supplementary_η,
     )
 
+    # First we query the `kwargs` defined in the `ProjectionParameters`
+    prj_kwargs = get_projected_to_kwargs(prj)
+    prj_kwargs = isnothing(prj_kwargs) ? (;) : prj_kwargs
+    # And attach the `kwargs` passed to `project_to`, those may override 
+    # some settings in the `ProjectionParameters`
+    if !isnothing(kwargs)
+        prj_kwargs = (; prj_kwargs..., kwargs...)
+    end
     # We disable the default `debug` statements, which are set in `Manopt` 
     # in order to improve the performance a little bit
-    kwargs = !haskey(kwargs, :debug) ? (; kwargs..., debug = missing) : kwargs
+    if !haskey(prj_kwargs, :debug)
+        prj_kwargs = (; prj_kwargs..., debug = missing)
+    end
 
     return _kernel_project_to(
         get_projected_to_type(prj),
@@ -281,7 +297,7 @@ function project_to(
         strategy,
         state,
         current_η,
-        kwargs,
+        prj_kwargs,
     )
 end
 
