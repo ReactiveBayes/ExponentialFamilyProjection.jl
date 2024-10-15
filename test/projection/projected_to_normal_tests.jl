@@ -95,7 +95,24 @@ end
 
 end
 
+@testitem "Project a product of `MvNormalMeanScalePrecision` and `MvNormalMeanScalePrecision` to `MvNormalMeanScalePrecision`" begin
+    using BayesBase, ExponentialFamily, Distributions, LinearAlgebra
 
+    include("./projected_to_setuptests.jl")
+
+    @testset let distribution = ProductOf(
+            MvNormalMeanScalePrecision(ones(2), 2),
+            MvNormalMeanScalePrecision(ones(2), 3),
+        )
+        @test test_projection_convergence(
+            distribution,
+            to = MvNormalMeanCovariance,
+            dims = (2, ),
+            conditioner = nothing,
+        )
+    end
+
+end
 
 @testitem "MLE" begin
     using BayesBase, ExponentialFamily, Distributions, JET
@@ -123,6 +140,9 @@ end
         @test test_projection_mle(distribution)
     end
 
+    @testset let distribution = MvNormalMeanScalePrecision(ones(2), 2)
+        @test test_projection_mle(distribution)
+    end
 
     @testset let distribution = MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2))))
         @test test_projection_mle(distribution)
