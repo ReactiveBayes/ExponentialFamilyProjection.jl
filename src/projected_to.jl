@@ -108,7 +108,7 @@ The following parameters are available:
 * `strategy = ExponentialFamilyProjection.DefaultStrategy()`: The strategy to use to compute the gradients.
 * `niterations = 100`: The number of iterations for the optimization procedure.
 * `tolerance = 1e-6`: The tolerance for the norm of the gradient.
-* `stepsize = ConstantStepsize(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
+* `stepsize = ConstantLength(0.1)`: The stepsize for the optimization procedure. Accepts stepsizes from `Manopt.jl`.
 * `seed`: Optional; Seed for the `rng`
 * `rng`: Optional; Random number generator
 * `direction = BoundedNormUpdateRule(static(1.0)`: Direction update rule. Accepts `Manopt.DirectionUpdateRule` from `Manopt.jl`.
@@ -117,7 +117,7 @@ Base.@kwdef struct ProjectionParameters{S,I,T,P,D,N,U}
     strategy::S = DefaultStrategy()
     niterations::I = 100
     tolerance::T = 1e-6
-    stepsize::P = ConstantStepsize(0.1)
+    stepsize::P = ConstantLength(0.1)
     seed::D = 42
     rng::N = StableRNG(seed)
     direction::U = BoundedNormUpdateRule(static(1.0))

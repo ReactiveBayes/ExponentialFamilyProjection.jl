@@ -3,7 +3,7 @@ import Manopt
 using LoopVectorization
 
 """
-    BoundedNormUpdateRule(limit; direction = IdentityUpdateRule()) 
+    BoundedNormUpdateRule(limit; direction = Manopt.IdentityUpdateRule()) 
 
 A `DirectionUpdateRule` is a direction rule that constrains the norm of the direction to a specified limit.
 
@@ -23,7 +23,7 @@ struct BoundedNormUpdateRule{L,D} <: Manopt.DirectionUpdateRule
     direction::D
 end
 
-function BoundedNormUpdateRule(limit; direction = IdentityUpdateRule())
+function BoundedNormUpdateRule(limit; direction = Manopt.IdentityUpdateRule())
     return BoundedNormUpdateRule(limit, direction)
 end
 

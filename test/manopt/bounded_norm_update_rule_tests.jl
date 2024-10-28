@@ -13,10 +13,10 @@
     # returning the unbounded gradient as the first argument and a collection of bounded gradients for testing.
     function apply_update_rules_for_test(p, limit)
         cpa = DefaultManoptProblem(M, ManifoldGradientObjective(f, grad_f))
-        gst = GradientDescentState(M, zero(p))
+        gst = GradientDescentState(M; p=zero(p))
         Manopt.set_iterate!(gst, M, p)
 
-        _, X = IdentityUpdateRule()(cpa, gst, 1)
+        _, X = Manopt.IdentityUpdateRule()(cpa, gst, 1)
         X_identity = copy(X)
 
         _, X = BoundedNormUpdateRule(limit)(cpa, gst, 1)
@@ -79,7 +79,7 @@
     @testset "JET tests" begin
         for limit in (1, 1.0, 1.0f0), p in (zeros(Float64, 3), zeros(Float32, 3))
             cpa = DefaultManoptProblem(M, ManifoldGradientObjective(f, grad_f))
-            gst = GradientDescentState(M, zero(p))
+            gst = GradientDescentState(M; p=zero(p))
             @test_opt BoundedNormUpdateRule(limit)(cpa, gst, 1)
             @test_opt BoundedNormUpdateRule(static(limit))(cpa, gst, 1)
             @test_opt BoundedNormUpdateRule(
