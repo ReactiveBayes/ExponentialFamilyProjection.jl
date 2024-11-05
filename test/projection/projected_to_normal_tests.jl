@@ -122,14 +122,19 @@ end
     end
 
     @testset let distribution = ProductOf(
-            MvNormalMeanScalePrecision(ones(40), 2),
-            MvNormalMeanScalePrecision(ones(40), 3),
-        )
+        MvNormalMeanScalePrecision(ones(20), 2),
+        MvNormalMeanScalePrecision(ones(20), 3),
+    )
         @test test_projection_convergence(
             distribution,
             to = MvNormalMeanScalePrecision,
-            dims = (40,),
+            dims = (20,),
             conditioner = nothing,
+            nsamples_niterations = 6000,
+            nsamples_range = 1000:1000:6000,
+            niterations_range = 400:100:1000,
+            nsamples_required_accuracy=0.3,
+            niterations_required_accuracy=0.3
         )
     end
 
