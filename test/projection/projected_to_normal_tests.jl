@@ -69,10 +69,7 @@ end
 
     @testset let distribution =
             MvNormalMeanCovariance(10randn(StableRNG(42), 4), 10rand(StableRNG(43), 4))
-        @test test_projection_convergence(
-            distribution,
-            niterations_range = 500:100:2000
-        )
+        @test test_projection_convergence(distribution, niterations_range = 500:100:2000)
     end
 end
 
@@ -88,7 +85,7 @@ end
         @test test_projection_convergence(
             distribution,
             to = MvNormalMeanCovariance,
-            dims = (2, ),
+            dims = (2,),
             conditioner = nothing,
         )
     end
@@ -106,8 +103,32 @@ end
         )
         @test test_projection_convergence(
             distribution,
-            to = MvNormalMeanCovariance,
-            dims = (2, ),
+            to = MvNormalMeanScalePrecision,
+            dims = (2,),
+            conditioner = nothing,
+        )
+    end
+
+    @testset let distribution = ProductOf(
+            MvNormalMeanScalePrecision(ones(8), 2),
+            MvNormalMeanScalePrecision(ones(8), 3),
+        )
+        @test test_projection_convergence(
+            distribution,
+            to = MvNormalMeanScalePrecision,
+            dims = (8,),
+            conditioner = nothing,
+        )
+    end
+
+    @testset let distribution = ProductOf(
+            MvNormalMeanScalePrecision(ones(40), 2),
+            MvNormalMeanScalePrecision(ones(40), 3),
+        )
+        @test test_projection_convergence(
+            distribution,
+            to = MvNormalMeanScalePrecision,
+            dims = (40,),
             conditioner = nothing,
         )
     end
@@ -157,10 +178,7 @@ end
 
     @testset let distribution =
             MvNormalMeanCovariance(10randn(StableRNG(42), 4), 10rand(StableRNG(43), 4))
-        @test test_projection_mle(
-            distribution,
-            niterations_range = 500:100:2000
-        )
+        @test test_projection_mle(distribution, niterations_range = 500:100:2000)
     end
 
 end
