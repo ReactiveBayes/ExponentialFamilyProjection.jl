@@ -557,6 +557,5 @@ end
 
     @test approximated isa MvNormalMeanCovariance
     @test kldivergence(approximated, true_dist) < 0.01  # Ensure good approximation
-    @show typeof(projection.parameters.direction)
     @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
 end
