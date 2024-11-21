@@ -54,7 +54,7 @@
     @test typeof(get_stopping_criterion(defaultparams)) ==
           typeof(get_stopping_criterion(parameters_from_creation))
     # These should pass as soon as `Manopt` implements `==`
-    @test_broken getstepsize(defaultparams) == getstepsize(parameters_from_creation)
+    @test getstepsize(defaultparams) == getstepsize(parameters_from_creation)
     @test_broken get_stopping_criterion(defaultparams) ==
                  get_stopping_criterion(parameters_from_creation)
 
@@ -518,7 +518,7 @@ end
         nothing,
     )
     initialpoint = rand(manifold)
-    direction = MomentumGradient(manifold, initialpoint)
+    direction = MomentumGradient(p=initialpoint)
 
     momentum_parameters =
         ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
@@ -529,7 +529,7 @@ end
 
     @test approximated isa MvNormalMeanCovariance
     @test kldivergence(approximated, true_dist) < 0.01
-    @test projection.parameters.direction isa MomentumGradient
+    @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
 end
 
 @testitem "MomentumGradient direction update rule on samples" begin
@@ -547,7 +547,7 @@ end
     )
 
     initialpoint = rand(rng, manifold)
-    direction = MomentumGradient(manifold, initialpoint)
+    direction = MomentumGradient(p=initialpoint)
 
     momentum_parameters =
         ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
@@ -557,5 +557,5 @@ end
 
     @test approximated isa MvNormalMeanCovariance
     @test kldivergence(approximated, true_dist) < 0.01  # Ensure good approximation
-    @test projection.parameters.direction isa MomentumGradient
+    @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
 end
