@@ -295,18 +295,6 @@ function control_variate_compute_gradient_buffered!(
             state.sufficientstatistics',
             state.gradsamples',
         )
-        # --
-
-        # Next we compute the `corr_matrix` using the sample principle, preallocate the storage
-        # The naive code would be `corr_matrix = cov_matrix * inv_fisher`
-        # --
-        corr_matrix = @alloc(
-            promote_type(eltype(cov_matrix), eltype(inv_fisher)),
-            size(cov_matrix, 1),
-            size(inv_fisher, 2)
-        )
-        mul!(corr_matrix, cov_matrix, inv_fisher)
-        # --
 
         # Compute means of sufficientstatistics and gradsamples inplace
         # The naive code would be 
@@ -323,19 +311,22 @@ function control_variate_compute_gradient_buffered!(
 
         # The next four lines finish the computation, and essentially equivalent to the following code 
         # `estimated_grad_vector = mean_gradsamples - corr_matrix * (mean_sufficientstats - gradlogpartition)`
+        # where `corr_matrix = cov_matrix * inv_fisher`
         # `ef_gradient = η - inv_fisher * estimated_grad_vector` # or (η - (η_ef + inv_fisher * estimated_grad_vector))
         # --
         tmp1 = @alloc(
             promote_type(eltype(mean_sufficientstats), eltype(gradlogpartition)),
             length(mean_sufficientstats)
         )
-        tmp2 = @alloc(promote_type(eltype(corr_matrix), eltype(tmp1)), length(tmp1))
+        tmp2 = @alloc(promote_type(eltype(inv_fisher), eltype(tmp1)), length(tmp1))
+        tmp3 = @alloc(promote_type(eltype(cov_matrix), eltype(tmp2)), length(tmp2))
 
         map!(-, tmp1, mean_sufficientstats, gradlogpartition) # tmp1 = (mean_sufficientstats - gradlogpartition)
-        mul!(tmp2, corr_matrix, tmp1)                         # tmp2 = corr_matrix * tmp1
-        map!(-, tmp1, mean_gradsamples, tmp2)                 # tmp1 = estimated_grad_vector = mean_gradsamples - tmp2
-        mul!(tmp2, inv_fisher, tmp1)                          # tmp2 = inv_fisher * estimated_grad_vector
-        map!(-, X, η, tmp2)                                   # X .= η .- tmp2
+        mul!(tmp2, inv_fisher, tmp1) # tmp2 = inv_fisher * tmp1
+        mul!(tmp3, cov_matrix, tmp2) # tmp3 = cov_matrix * tmp2, such that tmp3 = cov_matrix * inv_fisher * tmp1
+        map!(-, tmp1, mean_gradsamples, tmp3)                 # tmp1 = estimated_grad_vector = mean_gradsamples - tmp3
+        mul!(tmp3, inv_fisher, tmp1)                          # tmp3 = inv_fisher * estimated_grad_vector
+        map!(-, X, η, tmp3)                                   # X .= η .- tmp3
         # --
 
         nothing
