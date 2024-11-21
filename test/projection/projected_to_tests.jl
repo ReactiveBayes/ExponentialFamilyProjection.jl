@@ -547,7 +547,7 @@ end
     )
 
     initialpoint = rand(rng, manifold)
-    direction = Manopt.MomentumGradientRule(manifold; p=initialpoint)
+    direction = MomentumGradient(p=initialpoint)
 
     momentum_parameters =
         ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
@@ -557,5 +557,6 @@ end
 
     @test approximated isa MvNormalMeanCovariance
     @test kldivergence(approximated, true_dist) < 0.01  # Ensure good approximation
-    @test projection.parameters.direction isa Manopt.MomentumGradientRule
+    @show typeof(projection.parameters.direction)
+    @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
 end
