@@ -93,7 +93,7 @@ function test_convergence_nsamples(
     nsamples_tolerance = _convergence_nsamples_default_tolerance(distribution),
     nsamples_niterations = _convergence_nsamples_default_niterations(distribution),
     nsamples_rng = StableRNG(42),
-    nsamples_stepsize = ConstantStepsize(0.1),
+    nsamples_stepsize = ConstantLength(0.1),
     nsamples_required_accuracy = 1e-1,
     kwargs...,
 )
@@ -102,11 +102,11 @@ function test_convergence_nsamples(
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
                 nsamples = nsamples,
-                seed = rand(nsamples_rng, UInt),
             ),
             niterations = nsamples_niterations,
             tolerance = nsamples_tolerance,
             stepsize = nsamples_stepsize,
+            seed = rand(nsamples_rng, UInt),
         )
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
@@ -168,7 +168,7 @@ function test_convergence_niterations(
     niterations_tolerance = _convergence_niterations_default_tolerance(distribution),
     niterations_nsamples = _convergence_niterations_default_nsamples(distribution),
     niterations_rng = StableRNG(42),
-    niterations_stepsize = ConstantStepsize(0.1),
+    niterations_stepsize = ConstantLength(0.1),
     niterations_required_accuracy = 1e-1,
     kwargs...,
 )
@@ -177,11 +177,11 @@ function test_convergence_niterations(
         parameters = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
                 nsamples = niterations_nsamples,
-                seed = rand(niterations_rng, UInt),
             ),
             niterations = niterations,
             tolerance = niterations_tolerance,
             stepsize = niterations_stepsize,
+            seed = rand(niterations_rng, UInt),
         )
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
@@ -219,19 +219,18 @@ function test_convergence_niterations_mle(
     niterations_tolerance = _convergence_niterations_default_tolerance(distribution),
     niterations_nsamples = _convergence_niterations_default_nsamples(distribution),
     niterations_rng = StableRNG(42),
-    niterations_stepsize = ConstantStepsize(0.1),
+    niterations_stepsize = ConstantLength(0.1),
     niterations_required_accuracy = 1e-1,
     kwargs...,
 )
     experiment = map(niterations_range) do niterations
         data = rand(niterations_rng, distribution, niterations_nsamples)
         parameters = ProjectionParameters(
-            strategy = ExponentialFamilyProjection.MLEStrategy(
-                seed = rand(niterations_rng, UInt),
-            ),
+            strategy = ExponentialFamilyProjection.MLEStrategy(),
             niterations = niterations,
             tolerance = niterations_tolerance,
             stepsize = niterations_stepsize,
+            seed = rand(niterations_rng, UInt),
         )
         projection =
             ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
@@ -269,19 +268,18 @@ function test_convergence_nsamples_mle(
     nsamples_tolerance = _convergence_nsamples_default_tolerance(distribution),
     nsamples_niterations = _convergence_nsamples_default_niterations(distribution),
     nsamples_rng = StableRNG(42),
-    nsamples_stepsize = ConstantStepsize(0.1),
+    nsamples_stepsize = ConstantLength(0.1),
     nsamples_required_accuracy = 1e-1,
     kwargs...,
 )
     experiment = map(nsamples_range) do nsamples
         data = rand(nsamples_rng, distribution, nsamples)
         parameters = ProjectionParameters(
-            strategy = ExponentialFamilyProjection.MLEStrategy(
-                seed = rand(nsamples_rng, UInt),
-            ),
+            strategy = ExponentialFamilyProjection.MLEStrategy(),
             niterations = nsamples_niterations,
             tolerance = nsamples_tolerance,
             stepsize = nsamples_stepsize,
+            seed = rand(nsamples_rng, UInt),
         )
 
         projection =

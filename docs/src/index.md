@@ -13,6 +13,7 @@ In order to project a log probability density function onto a member of the expo
 ```@docs
 ExponentialFamilyProjection.ProjectionParameters
 ExponentialFamilyProjection.DefaultProjectionParameters
+ExponentialFamilyProjection.getinitialpoint
 ```
 
 Read more about different optimization strategies [here](@ref opt-strategies).
@@ -33,9 +34,6 @@ The projection is performed by calling the `project_to` function with the specif
 ExponentialFamilyProjection.project_to
 ```
 
-!!! note
-    Different strategies are compatible with different types of arguments. Read [Optimization strategies](@ref opt-strategies) section for more information.
-
 ## [Optimization strategies](@id opt-strategies)
 
 The optimization procedure requires computing the expectation of the gradient to perform gradient descent in the natural parameters space. Currently, the library provides the following strategies for computing these expectations:
@@ -45,6 +43,10 @@ ExponentialFamilyProjection.DefaultStrategy
 ExponentialFamilyProjection.ControlVariateStrategy
 ExponentialFamilyProjection.MLEStrategy
 ExponentialFamilyProjection.preprocess_strategy_argument
+ExponentialFamilyProjection.create_state!
+ExponentialFamilyProjection.prepare_state!
+ExponentialFamilyProjection.compute_cost
+ExponentialFamilyProjection.compute_gradient!
 ```
 
 For high-dimensional distributions, adjusting the default number of samples might be necessary to achieve better performance.
@@ -153,6 +155,10 @@ plot!(0.0:0.01:1.0, x -> pdf(result, x), label="estimated projection", fill = 0,
 ```
 
 ## Manopt extensions
+
+```@docs 
+ExponentialFamilyProjection.ProjectionCostGradientObjective
+```
 
 ### Bounded direction update rule
 

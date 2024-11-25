@@ -43,24 +43,25 @@ end
         c = getconditioner(ef)
         d = size(rand(rng, ef))
         M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        p = ProjectionParameters()
+        η = getnaturalparameters(ef)
 
         strategy = ExponentialFamilyProjection.MLEStrategy()
-        state = ExponentialFamilyProjection.prepare_state!(M, strategy, samples, ef, ())
-        strategy = ExponentialFamilyProjection.with_state(strategy, state)
-        obj = ExponentialFamilyProjection.CVICostGradientObjective(
+        state = ExponentialFamilyProjection.create_state!(strategy, M, p, samples, ef, ())
+        obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
+            p,
             samples,
+            copy(η),
             (),
             strategy,
-            nothing,
+            state,
         )
 
-        η = getnaturalparameters(ef)
         _logpartition = logpartition(ef)
         _gradlogpartition = gradlogpartition(ef)
         _inv_fisher = inv(fisherinformation(ef))
         cost = ExponentialFamilyProjection.compute_cost(
             M,
-            obj,
             strategy,
             state,
             η,
@@ -73,7 +74,6 @@ end
 
         ExponentialFamilyProjection.compute_gradient!(
             M,
-            obj,
             strategy,
             state,
             gradient,

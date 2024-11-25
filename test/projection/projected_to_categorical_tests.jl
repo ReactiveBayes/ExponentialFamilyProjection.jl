@@ -30,7 +30,7 @@ end
     include("./projected_to_setuptests.jl")
 
     @testset let distribution = ProductOf(Categorical([3/7, 2/7, 2/7]), Categorical([1/8, 3/8, 1/2]))
-        @test_broken test_projection_convergence(distribution, to = Categorical, dims = (), conditioner = 3)
+        test_projection_convergence(distribution, to = Categorical, dims = (), conditioner = 3)
     end
 end
 
