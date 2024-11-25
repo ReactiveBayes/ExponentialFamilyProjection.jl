@@ -23,6 +23,19 @@ struct BoundedNormUpdateRule{L,D} <: Manopt.DirectionUpdateRule
     direction::D
 end
 
+function init_direction_rule(d, _)
+    return d
+end
+
+function init_direction_rule(d::BoundedNormUpdateRule, ::Any)
+    return d
+end
+
+function init_direction_rule(bounded_direction::BoundedNormUpdateRule{L,D}, M) where {L, D <: Manopt.ManifoldDefaultsFactory}
+    inner_direction = bounded_direction.direction(M)
+    return BoundedNormUpdateRule(bounded_direction.limit, inner_direction)
+end
+
 function BoundedNormUpdateRule(limit; direction = Manopt.IdentityUpdateRule())
     return BoundedNormUpdateRule(limit, direction)
 end
