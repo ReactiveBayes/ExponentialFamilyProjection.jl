@@ -582,5 +582,6 @@ end
             logp,
             initialpoint = initialpoint,
         )
+        @test ExponentialFamilyProjection.check_inputs(projection, logp; initialpoint=nothing) === nothing
     end
 end
