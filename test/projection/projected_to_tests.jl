@@ -547,7 +547,7 @@ end
     )
 
     initialpoint = rand(rng, manifold)
-    direction = MomentumGradient(p=initialpoint)
+    direction = MomentumGradient()
 
     momentum_parameters =
         ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
@@ -558,4 +558,75 @@ end
     @test approximated isa MvNormalMeanCovariance
     @test kldivergence(approximated, true_dist) < 0.01  # Ensure good approximation
     @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
+end
+
+
+@testitem "BoundedNormUpdateRule with MomentumGradient on samples" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+    true_dist = MvNormal([1.0, 2.0], [1.0 0.7; 0.7 2.0])
+    rng = StableRNG(42)
+    samples = rand(rng, true_dist, 1000)
+
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(
+        MvNormalMeanCovariance,
+        (2,),
+        nothing,
+    )
+
+    initialpoint = rand(rng, manifold)
+
+    direction = ExponentialFamilyProjection.BoundedNormUpdateRule(10.0; 
+        direction = Manopt.MomentumGradient(p=initialpoint)
+    )
+
+    combined_parameters = ProjectionParameters(
+        direction = direction, 
+        niterations = 1000, 
+        tolerance = 1e-8
+    )
+
+    projection = ProjectedTo(MvNormalMeanCovariance, 2, parameters = combined_parameters)
+    approximated = project_to(projection, samples, initialpoint = initialpoint)
+
+    @test approximated isa MvNormalMeanCovariance
+    @test kldivergence(approximated, true_dist) < 0.01
+end
+
+@testitem "BoundedNormUpdateRule with Manopt update rules on logpdf" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+
+    true_dist = MvNormal([1.0, 2.0, 3.0], [1.0 0.7 0.3; 0.7 2.0 0.5; 0.3 0.5 3.0])
+    logp = (x) -> logpdf(true_dist, x)
+
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(
+        MvNormalMeanCovariance,
+        (3,),
+        nothing,
+    )
+    initialpoint = rand(manifold)
+
+    update_rules = [
+        Nesterov(),
+        MomentumGradient(momentum=0.9),
+        Manopt.IdentityUpdateRule()
+    ]
+    for update_rule in update_rules
+        direction = ExponentialFamilyProjection.BoundedNormUpdateRule(1000.0; 
+            direction = update_rule
+        )
+
+        momentum_parameters =
+            ProjectionParameters(direction = direction, tolerance = 1e-8)
+
+        projection = ProjectedTo(MvNormalMeanCovariance, 3, parameters = momentum_parameters)
+
+        approximated = project_to(projection, logp, initialpoint = initialpoint)
+
+        @test approximated isa MvNormalMeanCovariance
+        @test kldivergence(approximated, true_dist) < 0.01
+    end
 end
