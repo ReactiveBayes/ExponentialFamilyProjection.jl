@@ -559,3 +559,28 @@ end
     @test kldivergence(approximated, true_dist) < 0.01  # Ensure good approximation
     @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
 end
+
+@testitem "ProjectedTo should throw an error if dimension of the point and manifold are different" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+    true_dist = MvNormal([1.0, 2.0, 3.0], [1.0 0.7 0.3; 0.7 2.0 0.5; 0.3 0.5 3.0])
+    logp = (x) -> logpdf(true_dist, x)
+
+
+    for i in 1:10
+        manifold = ExponentialFamilyManifolds.get_natural_manifold(
+            MvNormalMeanCovariance,
+            (i,),
+            nothing,
+        )
+        initialpoint = rand(manifold)
+        projection = ProjectedTo(MvNormalMeanCovariance, i+2)
+
+        @test_throws "The initial point must be on the manifold `$(ExponentialFamilyProjection.get_projected_to_manifold(projection))`, got `$(typeof(initialpoint))`" project_to(
+            projection,
+            logp,
+            initialpoint = initialpoint,
+        )
+    end
+end
