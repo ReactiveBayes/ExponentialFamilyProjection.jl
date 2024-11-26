@@ -182,6 +182,16 @@ end
 
 using Manopt, StaticTools
 
+function check_inputs(prj::ProjectedTo, projection_argument::F, supplementary...; initialpoint = nothing, kwargs...) where {F}
+    if isnothing(initialpoint)
+        return
+    end
+    if !(initialpoint ∈ get_projected_to_manifold(prj))
+        return error(
+            lazy"The initial point must be on the manifold `$(get_projected_to_manifold(prj))`, got `$(typeof(initialpoint))`",
+        )
+    end
+end 
 """
     project_to(to::ProjectedTo, argument::F, supplementary..., initialpoint, kwargs...)
 
@@ -239,7 +249,6 @@ function project_to(
 ) where {F}
     M = get_projected_to_manifold(prj)
     projection_parameters = get_projected_to_parameters(prj)
-
     # "Supplementary" natural parameters are parameters that are simply being subtracted 
     # from the natural parameters of the current estiamted distribution. This might be useful 
     # to project a "product" of the function `f` and `supplementary` distributions
@@ -263,8 +272,8 @@ function project_to(
         projection_argument,
     )
     current_η = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
+    check_inputs(prj, projection_argument, supplementary...; initialpoint = current_η, kwargs...)
     current_ef = convert(ExponentialFamilyDistribution, M, current_η)
-
     state = create_state!(
         strategy,
         M,
