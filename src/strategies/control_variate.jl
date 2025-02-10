@@ -15,20 +15,22 @@ The following parameters are available:
 !!! note
     This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
-Base.@kwdef struct ControlVariateStrategy{S,B}
+Base.@kwdef struct ControlVariateStrategy{S, B, TL}
     nsamples::S = 2000
     buffer::B = StaticTools.MallocSlabBuffer()
+    base_logpdf_type::Type{TL}  = InplaceLogpdf
 end
 
 get_nsamples(strategy::ControlVariateStrategy) = strategy.nsamples
 get_buffer(strategy::ControlVariateStrategy) = strategy.buffer
+get_base_logpdf_type(strategy::ControlVariateStrategy) = strategy.base_logpdf_type
 
 function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
     return get_nsamples(a) == get_nsamples(b) && get_buffer(a) == get_buffer(b)
 end
 
-preprocess_strategy_argument(strategy::ControlVariateStrategy, argument::Any) =
-    (strategy, convert(InplaceLogpdf, argument))
+preprocess_strategy_argument(strategy::ControlVariateStrategy{S,B,TL}, argument::Any) where {S,B,TL} =
+    (strategy, convert(TL, argument))
 preprocess_strategy_argument(::ControlVariateStrategy, argument::AbstractArray) = error(
     lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(argument))` instead.",
 )
@@ -141,14 +143,14 @@ prepare_logbasemeasures_container(
 ) = zeros(paramfloattype(distribution), nsamples)
 
 function prepare_state!(
-    strategy::ControlVariateStrategy,
+    ::ControlVariateStrategy{S,B,TL},
     state::ControlVariateStrategyState,
     M::AbstractManifold,
     parameters::ProjectionParameters,
     projection_argument,
     current_ef,
     supplementary_η,
-)
+) where {S,B,TL}
 
     # We need to reset the RNG state every time we prepare the state
     # This is important not only for reproducibility, but also to ensure
@@ -161,8 +163,8 @@ function prepare_state!(
     glogpartion = ExponentialFamily.gradlogpartition(current_ef)
     J = size(get_gradsamples(state), 1)
 
-    inplace_projection_argument = convert(BayesBase.InplaceLogpdf, projection_argument)
-    inplace_projection_argument(get_logpdfs(state), sample_container)
+    inplace_projection_argument! = convert(TL, projection_argument)
+    inplace_projection_argument!(get_logpdfs(state), sample_container)
 
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
 
