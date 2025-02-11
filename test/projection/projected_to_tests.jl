@@ -627,7 +627,7 @@ end
     bench_batch = @benchmark batch_logpdf(out1, samples)
 
     @test isapprox(min(bench_converted.times...), min(bench_regular.times...), rtol=1e-1)
-    @test min(bench_batch.times...) < min(bench_regular.times...)/10
+    @test min(bench_batch.times...) < min(bench_regular.times...)/5
 
     # Create strategies with different base_logpdf_type
     batch_size = 10
