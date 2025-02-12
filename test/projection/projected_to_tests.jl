@@ -585,3 +585,96 @@ end
         @test ExponentialFamilyProjection.check_inputs(projection, logp; initialpoint=nothing) === nothing
     end
 end
+
+@testitem "BatchLogpdf should maintain batch behavior when converted" begin
+    using BayesBase
+    using BenchmarkTools
+    using ExponentialFamilyProjection
+    using ExponentialFamily
+    using StableRNGs
+    using Test
+
+    import BayesBase: InplaceLogpdf
+
+    include("batch_logpdf.jl")
+
+    # Create a delayed normal distribution
+    function create_delayed_normal(delay_seconds=0.1)
+        dist = NormalMeanVariance(0.0, 1.0)
+        return function delayed_logpdf(x)
+            sleep(delay_seconds) # expansive operation (for example moving data to GPU)
+            return logpdf(dist, x)
+        end
+    end
+
+    delay = 0.0001  
+    batch_logpdf = BatchLogpdf(create_delayed_normal(delay))
+    regular_inplace = convert(InplaceLogpdf, create_delayed_normal(delay));
+
+    nsamples = 10
+
+    batch_logpdf = BatchLogpdf(create_delayed_normal(delay))
+    converted_batch_logpdf = convert(InplaceLogpdf, batch_logpdf)
+    regular_inplace = convert(InplaceLogpdf, create_delayed_normal(delay));
+
+    # Test samples
+    samples = randn(nsamples)
+    out1 = zeros(nsamples)
+    out2 = zeros(nsamples)
+
+    bench_converted = @benchmark converted_batch_logpdf(out1, samples)
+    bench_regular = @benchmark regular_inplace(out2, samples)
+    bench_batch = @benchmark batch_logpdf(out1, samples)
+
+    @test isapprox(min(bench_converted.times...), min(bench_regular.times...), rtol=1e-1)
+    @test min(bench_batch.times...) < min(bench_regular.times...)/5
+
+    # Create strategies with different base_logpdf_type
+    batch_size = 10
+    strategy_batch = ExponentialFamilyProjection.ControlVariateStrategy(
+        nsamples=nsamples,
+        base_logpdf_type=BatchLogpdf{batch_size} # Ensure we're using the same buffer type
+    )
+
+    strategy_inplace = ExponentialFamilyProjection.ControlVariateStrategy(
+        nsamples=nsamples,
+        base_logpdf_type=InplaceLogpdf
+    )
+
+    projection_batch = ProjectedTo(
+        NormalMeanVariance, 
+        parameters=ProjectionParameters(
+            niterations=3,
+            tolerance=1e-1,
+            strategy=strategy_batch
+        )
+    )
+
+    projection_inplace = ProjectedTo(
+        NormalMeanVariance, 
+        parameters=ProjectionParameters(
+            niterations=3,
+            tolerance=1e-1,
+            strategy=strategy_inplace
+        )
+    )
+
+    # Add counter to track number of logpdf calls
+    ncalls = 0
+    target_logpdf = function(x)
+        global ncalls += 1
+        sleep(delay)
+        return logpdf(NormalMeanVariance(0.0, 1.0), x)
+    end
+
+    # Reset counter and time batch strategy
+    global ncalls = 0
+    result_batch = project_to(projection_batch, target_logpdf)
+    ncalls_batch = ncalls
+
+    global ncalls = 0
+    result_inplace = project_to(projection_inplace, target_logpdf)
+    ncalls_inplace = ncalls
+    @test ncalls_batch == ncalls_inplace // batch_size
+    @test result_batch ≈ result_inplace
+end 
