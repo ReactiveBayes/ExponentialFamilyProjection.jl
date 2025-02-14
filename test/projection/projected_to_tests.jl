@@ -54,7 +54,7 @@
     @test typeof(get_stopping_criterion(defaultparams)) ==
           typeof(get_stopping_criterion(parameters_from_creation))
     # These should pass as soon as `Manopt` implements `==`
-    @test_broken getstepsize(defaultparams) == getstepsize(parameters_from_creation)
+    @test getstepsize(defaultparams) == getstepsize(parameters_from_creation)
     @test_broken get_stopping_criterion(defaultparams) ==
                  get_stopping_criterion(parameters_from_creation)
 
@@ -121,71 +121,6 @@ end
     end
 end
 
-@testitem "ProjectionParameters usebuffer" begin
-    using Bumper
-    import ExponentialFamilyProjection: getstepsize, with_buffer
-
-    parameters = ProjectionParameters(usebuffer = Val(true))
-
-    result = with_buffer(parameters) do buffer
-        @test buffer !== nothing
-        @no_escape buffer begin
-            container = @alloc(Float64, 10)
-            @test length(container) === 10
-        end
-        return "asd"
-    end
-    @test result == "asd"
-
-    parameters = ProjectionParameters(usebuffer = Val(false))
-
-    result = with_buffer(parameters) do buffer
-        @test buffer === nothing
-        return "dsa"
-    end
-    @test result == "dsa"
-
-end
-
-@testitem "Projection result should not depend on the usage of buffer" begin
-    using ExponentialFamily, BayesBase
-    distributions = [
-        Beta(10, 10),
-        Gamma(10, 10),
-        Exponential(1),
-        LogNormal(0, 1),
-        Dirichlet([1, 1]),
-        NormalMeanVariance(0.0, 1.0),
-        MvNormalMeanCovariance([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
-        Chisq(30.0)
-    ]
-
-    for distribution in distributions
-        parameters_with_buffer = ProjectionParameters(usebuffer = Val(true))
-        parameters_without_buffer = ProjectionParameters(usebuffer = Val(false))
-
-        dims = size(rand(distribution))
-
-        prj_with_buffer = ProjectedTo(
-            ExponentialFamily.exponential_family_typetag(distribution),
-            dims...;
-            parameters = parameters_with_buffer,
-        )
-        prj_without_buffer = ProjectedTo(
-            ExponentialFamily.exponential_family_typetag(distribution),
-            dims...;
-            parameters = parameters_without_buffer,
-        )
-
-        targetfn = (x) -> logpdf(distribution, x)
-        result_with_buffer = project_to(prj_with_buffer, targetfn)
-        result_without_buffer = project_to(prj_without_buffer, targetfn)
-
-        # Small differences are allowed due to different LinearAlgebra routines
-        @test result_with_buffer ≈ result_without_buffer
-    end
-end
-
 @testitem "Projection should support supplementary natural parameters" begin
     using ExponentialFamily, StableRNGs, BayesBase, Distributions
 
@@ -193,9 +128,10 @@ end
     prj = ProjectedTo(
         Beta,
         parameters = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.ControlVariateStrategy(),
             tolerance = 1e-4,
             niterations = 300,
-            strategy = ExponentialFamilyProjection.ControlVariateStrategy(rng = rng),
+            rng = rng,
         ),
     )
 
@@ -495,5 +431,319 @@ end
     # Do not produce debug output by default
     @test_logs match_mode = :all project_to(prj, targetfn)
     @test_logs match_mode = :all project_to(prj, targetfn, debug = [])
-    
+
 end
+
+@testitem "kwargs in the `project_to` should take precedence over kwargs in `ProjectionParameters`" begin
+    using ExponentialFamilyProjection, StableRNGs, ExponentialFamily, Manopt, JET
+
+    @testset begin
+        rng = StableRNG(42)
+        prj = ProjectedTo(Beta; kwargs = (debug = missing,))
+        targetfn = (x) -> rand(rng) > 0.5 ? 1 : -1
+
+        @test_logs match_mode = :all project_to(prj, targetfn)
+        @test_logs (:warn, r"The cost increased.*") match_mode = :any project_to(
+            prj,
+            targetfn,
+            debug = [Manopt.DebugWarnIfCostIncreases()],
+        )
+    end
+
+    @testset begin
+        rng = StableRNG(42)
+        prj = ProjectedTo(Beta; kwargs = (debug = [Manopt.DebugWarnIfCostIncreases()],))
+        targetfn = (x) -> rand(rng) > 0.5 ? 1 : -1
+
+        @test_logs (:warn, r"The cost increased.*") match_mode = :any project_to(
+            prj,
+            targetfn,
+        )
+        @test_logs match_mode = :all project_to(prj, targetfn, debug = missing)
+        @test_logs match_mode = :all project_to(prj, targetfn, debug = [])
+    end
+
+end
+
+@testitem "Direction rule can improve for MLE" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, StableRNGs
+
+    dists = (
+        Beta(1, 1),
+        Gamma(10, 20),
+        Bernoulli(0.8),
+        NormalMeanVariance(-10, 0.1),
+        Poisson(4.8),
+    )
+
+    for dist in dists
+        rng = StableRNG(42)
+        data = rand(rng, dist, 4000)
+
+        norm_bounds = [0.01, 0.1, 10.0]
+
+        divergences = map(norm_bounds) do norm
+            parameters = ProjectionParameters(
+                direction = ExponentialFamilyProjection.BoundedNormUpdateRule(norm),
+            )
+            projection = ProjectedTo(
+                ExponentialFamily.exponential_family_typetag(dist),
+                ()...,
+                parameters = parameters,
+            )
+            approximated = project_to(projection, data)
+            kldivergence(approximated, dist)
+        end
+
+        @testset "true dist $(dist)" begin
+            @test issorted(divergences, rev = true)
+            @test (divergences[1] - divergences[end]) / divergences[1] > 0.05
+        end
+
+    end
+end
+
+@testitem "MomentumGradient direction update rule on logpdf" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+
+    true_dist = MvNormal([1.0, 2.0], [1.0 0.7; 0.7 2.0])
+    logp = (x) -> logpdf(true_dist, x)
+
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(
+        MvNormalMeanCovariance,
+        (2,),
+        nothing,
+    )
+    initialpoint = rand(manifold)
+    direction = MomentumGradient(p=initialpoint)
+
+    momentum_parameters =
+        ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
+
+    projection = ProjectedTo(MvNormalMeanCovariance, 2, parameters = momentum_parameters)
+
+    approximated = project_to(projection, logp, initialpoint = initialpoint)
+
+    @test approximated isa MvNormalMeanCovariance
+    @test kldivergence(approximated, true_dist) < 0.01
+    @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
+end
+
+@testitem "MomentumGradient direction update rule on samples" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+    true_dist = MvNormal([1.0, 2.0], [1.0 0.7; 0.7 2.0])
+    rng = StableRNG(42)
+    samples = rand(rng, true_dist, 1000)
+
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(
+        MvNormalMeanCovariance,
+        (2,),
+        nothing,
+    )
+
+    initialpoint = rand(rng, manifold)
+    direction = MomentumGradient()
+
+    momentum_parameters =
+        ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
+
+    projection = ProjectedTo(MvNormalMeanCovariance, 2, parameters = momentum_parameters)
+    approximated = project_to(projection, samples, initialpoint = initialpoint)
+
+    @test approximated isa MvNormalMeanCovariance
+    @test kldivergence(approximated, true_dist) < 0.01  # Ensure good approximation
+    @test projection.parameters.direction isa Manopt.ManifoldDefaultsFactory
+end
+
+@testitem "BoundedNormUpdateRule with MomentumGradient on samples" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+    true_dist = MvNormal([1.0, 2.0], [1.0 0.7; 0.7 2.0])
+    rng = StableRNG(42)
+    samples = rand(rng, true_dist, 1000)
+
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(
+        MvNormalMeanCovariance,
+        (2,),
+        nothing,
+    )
+
+    initialpoint = rand(rng, manifold)
+
+    direction = ExponentialFamilyProjection.BoundedNormUpdateRule(10.0; 
+        direction = Manopt.MomentumGradient(p=initialpoint)
+    )
+
+    combined_parameters = ProjectionParameters(
+        direction = direction, 
+        niterations = 1000, 
+        tolerance = 1e-8
+    )
+
+    projection = ProjectedTo(MvNormalMeanCovariance, 2, parameters = combined_parameters)
+    approximated = project_to(projection, samples, initialpoint = initialpoint)
+
+    @test approximated isa MvNormalMeanCovariance
+    @test kldivergence(approximated, true_dist) < 0.01
+end
+
+@testitem "BoundedNormUpdateRule with Manopt update rules on logpdf" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+
+    true_dist = MvNormal([1.0, 2.0, 3.0], [1.0 0.7 0.3; 0.7 2.0 0.5; 0.3 0.5 3.0])
+    logp = (x) -> logpdf(true_dist, x)
+
+    manifold = ExponentialFamilyManifolds.get_natural_manifold(
+        MvNormalMeanCovariance,
+        (3,),
+        nothing,
+    )
+    initialpoint = rand(manifold)
+
+    update_rules = [
+        Nesterov(),
+        MomentumGradient(momentum=0.9),
+        Manopt.IdentityUpdateRule()
+    ]
+    for update_rule in update_rules
+        direction = ExponentialFamilyProjection.BoundedNormUpdateRule(1000.0; 
+            direction = update_rule
+        )
+
+        momentum_parameters =
+            ProjectionParameters(direction = direction, tolerance = 1e-8)
+
+        projection = ProjectedTo(MvNormalMeanCovariance, 3, parameters = momentum_parameters)
+
+        approximated = project_to(projection, logp, initialpoint = initialpoint)
+
+        @test approximated isa MvNormalMeanCovariance
+        @test kldivergence(approximated, true_dist) < 0.01
+    end
+end
+@testitem "ProjectedTo should throw an error if dimension of the point and manifold are different" begin
+    using BayesBase, ExponentialFamily, Distributions
+    using ExponentialFamilyProjection, ExponentialFamilyManifolds, Manopt, StableRNGs
+
+    true_dist = MvNormal([1.0, 2.0, 3.0], [1.0 0.7 0.3; 0.7 2.0 0.5; 0.3 0.5 3.0])
+    logp = (x) -> logpdf(true_dist, x)
+
+
+    for i in 1:10
+        manifold = ExponentialFamilyManifolds.get_natural_manifold(
+            MvNormalMeanCovariance,
+            (i,),
+            nothing,
+        )
+        initialpoint = rand(manifold)
+        projection = ProjectedTo(MvNormalMeanCovariance, i+2)
+
+        @test_throws "The initial point must be on the manifold `$(ExponentialFamilyProjection.get_projected_to_manifold(projection))`, got `$(typeof(initialpoint))`" project_to(
+            projection,
+            logp,
+            initialpoint = initialpoint,
+        )
+        @test ExponentialFamilyProjection.check_inputs(projection, logp; initialpoint=nothing) === nothing
+    end
+end
+
+@testitem "BatchLogpdf should maintain batch behavior when converted" begin
+    using BayesBase
+    using BenchmarkTools
+    using ExponentialFamilyProjection
+    using ExponentialFamily
+    using StableRNGs
+    using Test
+
+    import BayesBase: InplaceLogpdf
+
+    include("batch_logpdf.jl")
+
+    # Create a delayed normal distribution
+    function create_delayed_normal(delay_seconds=0.1)
+        dist = NormalMeanVariance(0.0, 1.0)
+        return function delayed_logpdf(x)
+            sleep(delay_seconds) # expansive operation (for example moving data to GPU)
+            return logpdf(dist, x)
+        end
+    end
+
+    delay = 0.0001  
+    batch_logpdf = BatchLogpdf(create_delayed_normal(delay))
+    regular_inplace = convert(InplaceLogpdf, create_delayed_normal(delay));
+
+    nsamples = 10
+
+    batch_logpdf = BatchLogpdf(create_delayed_normal(delay))
+    converted_batch_logpdf = convert(InplaceLogpdf, batch_logpdf)
+    regular_inplace = convert(InplaceLogpdf, create_delayed_normal(delay));
+
+    # Test samples
+    samples = randn(nsamples)
+    out1 = zeros(nsamples)
+    out2 = zeros(nsamples)
+
+    bench_converted = @benchmark converted_batch_logpdf(out1, samples)
+    bench_regular = @benchmark regular_inplace(out2, samples)
+    bench_batch = @benchmark batch_logpdf(out1, samples)
+
+    @test isapprox(min(bench_converted.times...), min(bench_regular.times...), rtol=1e-1)
+    @test min(bench_batch.times...) < min(bench_regular.times...)/5
+
+    # Create strategies with different base_logpdf_type
+    batch_size = 10
+    strategy_batch = ExponentialFamilyProjection.ControlVariateStrategy(
+        nsamples=nsamples,
+        base_logpdf_type=BatchLogpdf{batch_size} # Ensure we're using the same buffer type
+    )
+
+    strategy_inplace = ExponentialFamilyProjection.ControlVariateStrategy(
+        nsamples=nsamples,
+        base_logpdf_type=InplaceLogpdf
+    )
+
+    projection_batch = ProjectedTo(
+        NormalMeanVariance, 
+        parameters=ProjectionParameters(
+            niterations=3,
+            tolerance=1e-1,
+            strategy=strategy_batch
+        )
+    )
+
+    projection_inplace = ProjectedTo(
+        NormalMeanVariance, 
+        parameters=ProjectionParameters(
+            niterations=3,
+            tolerance=1e-1,
+            strategy=strategy_inplace
+        )
+    )
+
+    # Add counter to track number of logpdf calls
+    ncalls = 0
+    target_logpdf = function(x)
+        global ncalls += 1
+        sleep(delay)
+        return logpdf(NormalMeanVariance(0.0, 1.0), x)
+    end
+
+    # Reset counter and time batch strategy
+    global ncalls = 0
+    result_batch = project_to(projection_batch, target_logpdf)
+    ncalls_batch = ncalls
+
+    global ncalls = 0
+    result_inplace = project_to(projection_inplace, target_logpdf)
+    ncalls_inplace = ncalls
+    @test ncalls_batch == ncalls_inplace // batch_size
+    @test result_batch ≈ result_inplace
+end 
