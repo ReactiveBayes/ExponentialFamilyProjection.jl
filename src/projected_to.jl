@@ -336,13 +336,15 @@ function _kernel_project_to(
     # `gradient_descent!` is a type-unstable call, so better not to use `q = gradient_descent!`
     # `gradient_descent!` will override `q` instead
     q = current_η
+    direction = getdirection(projection_parameters)
+    inited_direction = init_direction_rule(direction, M)
     gradient_descent!(
         M,
         objective,
         current_η;
         stopping_criterion = get_stopping_criterion(projection_parameters),
         stepsize = getstepsize(projection_parameters),
-        direction = getdirection(projection_parameters),
+        direction = inited_direction,
         kwargs...,
     )
 
