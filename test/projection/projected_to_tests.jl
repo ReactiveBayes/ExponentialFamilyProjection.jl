@@ -696,7 +696,14 @@ end
     bench_batch = @benchmark batch_logpdf(out1, samples) seconds=1
 
     @test isapprox(mean(bench_converted.times), mean(bench_regular.times), rtol=1e-1)
-    @test mean(bench_batch.times) < mean(bench_regular.times)/5
+
+    # This is not a correctness test, but a performance test.
+    # On Julia 1.11, the batch logpdf is faster than on Julia 1.10.
+    @static if VERSION >= v"1.11"
+        @test mean(bench_batch.times) < mean(bench_regular.times)/5
+    else 
+        @test mean(bench_batch.times) < mean(bench_regular.times)
+    end
 
     # Create strategies with different base_logpdf_type
     batch_size = 10
