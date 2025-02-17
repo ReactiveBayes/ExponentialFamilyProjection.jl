@@ -691,12 +691,12 @@ end
     out1 = zeros(nsamples)
     out2 = zeros(nsamples)
 
-    bench_converted = @benchmark converted_batch_logpdf(out1, samples)
-    bench_regular = @benchmark regular_inplace(out2, samples)
-    bench_batch = @benchmark batch_logpdf(out1, samples)
+    bench_converted = @benchmark converted_batch_logpdf(out1, samples) seconds=1
+    bench_regular = @benchmark regular_inplace(out2, samples) seconds=1
+    bench_batch = @benchmark batch_logpdf(out1, samples) seconds=1
 
-    @test isapprox(min(bench_converted.times...), min(bench_regular.times...), rtol=1e-1)
-    @test min(bench_batch.times...) < min(bench_regular.times...)/5
+    @test isapprox(mean(bench_converted.times), mean(bench_regular.times), rtol=1e-1)
+    @test mean(bench_batch.times) < mean(bench_regular.times)/5
 
     # Create strategies with different base_logpdf_type
     batch_size = 10
