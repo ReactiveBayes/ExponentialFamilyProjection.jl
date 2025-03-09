@@ -58,6 +58,8 @@ end
             state,
         )
 
+        @test state == state
+
         _logpartition = logpartition(ef)
         _gradlogpartition = gradlogpartition(ef)
         _inv_fisher = inv(fisherinformation(ef))

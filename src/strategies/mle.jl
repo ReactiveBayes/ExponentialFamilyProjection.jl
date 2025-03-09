@@ -21,7 +21,7 @@ Base.@kwdef struct MLEStrategyState{F}
 end
 
 function Base.:(==)(a::MLEStrategyState, b::MLEStrategyState)::Bool
-    return a.targetfn == b.targetgn
+    return a.targetfn == b.targetfn
 end
 
 gettargetfn(state::MLEStrategyState) = state.targetfn
