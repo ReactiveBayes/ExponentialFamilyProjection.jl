@@ -44,7 +44,7 @@ end
     end
 
     @testset let distribution = Poisson(10)
-        @test test_projection_mle(distribution, nsamples_range = 500:200:4000, niterations_nsamples = 700)
+        @test test_projection_mle(distribution)
     end
 
     @testset let distribution = Poisson(0.5)

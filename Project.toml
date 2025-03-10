@@ -1,7 +1,7 @@
 name = "ExponentialFamilyProjection"
 uuid = "17f509fa-9a96-44ba-99b2-1c5f01f0931b"
 authors = ["Mykola Lukashchuk <m.lukashchuk@tue.nl>", "Dmitry Bagaev <bvdmitri@gmail.com>", "Albert Podusenko <albert@lazydynamics.com>"]
-version = "2.0.2"
+version = "2.0.3"
 
 [deps]
 BayesBase = "b4ee3484-f114-42fe-b91c-797d54a0c67e"
@@ -11,7 +11,6 @@ ExponentialFamily = "62312e5e-252a-4322-ace9-a5f4bf9b357b"
 ExponentialFamilyManifolds = "5c9727c4-3b82-4ab3-b165-76e2eb971b08"
 FastCholesky = "2d5283b6-8564-42b6-bb00-83ed8e915756"
 FillArrays = "1a297f60-69ca-5386-bcde-b61e274b549b"
-ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 Manifolds = "1cead3c2-87b3-11e9-0ccd-23c62b72b94e"
