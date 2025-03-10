@@ -30,6 +30,7 @@ end
             Beta(1, 1),
             NormalMeanVariance(0, 1),
             # ForwardDiff gradient is not correct for MvNormalMeanCovariance
+            # So we will not compare out closed form gradient with ForwardDiff gradient
             # MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2)))),
             Poisson(0.5),
             Chisq(30.0),
