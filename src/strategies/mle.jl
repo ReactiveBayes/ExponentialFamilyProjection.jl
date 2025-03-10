@@ -1,4 +1,4 @@
-using ForwardDiff, LoopVectorization
+using LoopVectorization
 
 """
     MLEStrategy()
@@ -16,19 +16,15 @@ preprocess_strategy_argument(::MLEStrategy, argument::Any) = error(
     lazy"`MLEStrategy` requires the projection argument to be an array of samples. Got `$(typeof(argument))` instead.",
 )
 
-Base.@kwdef struct MLEStrategyState{F,C,G}
+Base.@kwdef struct MLEStrategyState{F}
     targetfn::F
-    config::C
-    tmpgrad::G
 end
 
 function Base.:(==)(a::MLEStrategyState, b::MLEStrategyState)::Bool
-    return a.targetfn == b.targetgn && a.config == b.config && a.tmpgrad == b.tmpgrad
+    return a.targetfn == b.targetfn
 end
 
 gettargetfn(state::MLEStrategyState) = state.targetfn
-getconfig(state::MLEStrategyState) = state.config
-gettmpgrad(state::MLEStrategyState) = state.tmpgrad
 
 function create_state!(
     strategy::MLEStrategy,
@@ -40,11 +36,10 @@ function create_state!(
 )
     _, sample_container = ExponentialFamily.check_logpdf(initial_ef, samples)
 
-    # Our samples are fixed, thus we can precompute all the `sufficientstatistics` once
     sufficientstatistics = zeros(
         paramfloattype(initial_ef),
         length(getnaturalparameters(initial_ef)),
-        length(samples),
+        length(sample_container),
     )
 
     J = size(sufficientstatistics, 1)
@@ -59,9 +54,7 @@ function create_state!(
     end
 
     targetfn = MLETargetFn(M, samples, sufficientstatistics)
-    config = ForwardDiff.GradientConfig(targetfn, getnaturalparameters(initial_ef))
-    tmpgrad = ForwardDiff.gradient(targetfn, getnaturalparameters(initial_ef), config)
-    return MLEStrategyState(targetfn, config, tmpgrad)
+    return MLEStrategyState(targetfn)
 end
 
 function prepare_state!(
@@ -121,7 +114,12 @@ function compute_gradient!(
     _,
     inv_fisher,
 )
-    G = ForwardDiff.gradient!(gettmpgrad(state), gettargetfn(state), η, getconfig(state))
+    ef = convert(ExponentialFamilyDistribution, M, η)
+    targetfn = gettargetfn(state)
+    mean_sufficient_stats = mean(targetfn.sufficientstatistics, dims = 2)
+    
+    # The gradient for MLE is: E[T(x)] - ∇A(η)
+    G = -view(mean_sufficient_stats, :, 1) + gradlogpartition(ef)
     X = mul!(X, inv_fisher, G)
     return X
 end
