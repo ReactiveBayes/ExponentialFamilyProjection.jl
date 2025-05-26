@@ -140,7 +140,11 @@ end
 
 end
 
-@testitem "MLE" begin
+@testitem "MLE: NormalMeanVariance" begin
+    using BayesBase, ExponentialFamily, Distributions, JET
+    using ExponentialFamilyProjection
+
+    include("./projected_to_setuptests.jl")
     using BayesBase, ExponentialFamily, Distributions, JET
     using ExponentialFamilyProjection, LinearAlgebra
 
@@ -165,6 +169,13 @@ end
     @testset let distribution = Normal(-3.14, 2.71)
         @test test_projection_mle(distribution)
     end
+end
+
+@testitem "MLE: MvNormalMeanScalePrecision" begin
+    using BayesBase, ExponentialFamily, Distributions, JET
+    using ExponentialFamilyProjection, LinearAlgebra
+
+    include("./projected_to_setuptests.jl")
 
     @testset let distribution = MvNormalMeanScalePrecision(ones(2), 2)
         @test test_projection_mle(distribution)

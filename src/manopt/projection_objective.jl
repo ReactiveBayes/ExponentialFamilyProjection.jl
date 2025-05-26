@@ -1,4 +1,3 @@
-
 """
     ProjectionCostGradientObjective
 
@@ -33,7 +32,7 @@ get_strategy(obj::ProjectionCostGradientObjective) = obj.strategy
 get_strategy_state(obj::ProjectionCostGradientObjective) = obj.strategy_state
 
 function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
-    p_copy = similar(p)
+    p_copy = deepcopy(p)
     copyto!(p_copy, p)
     current_ef = convert(ExponentialFamilyDistribution, M, p_copy)
     current_η = copyto!(get_current_η(objective), getnaturalparameters(current_ef))
@@ -87,9 +86,9 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
         gradlogpartition,
         inv_fisher,
     )
-    X_p = ExponentialFamilyManifolds.partition_point(M, X_nat)
-    X_p = project!(M, X_p, p, X_p)
-    return c, X_p
+    X = jacobian_nat_to_manifold!(M, X, X_nat)
+    X = project!(M, X, p, X)
+    return c, X
 end
 
 

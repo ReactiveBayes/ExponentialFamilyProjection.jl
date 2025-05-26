@@ -22,7 +22,9 @@ end
         ExponentialFamilyManifolds,
         ExponentialFamilyProjection,
         StableRNGs,
-        ForwardDiff
+        ForwardDiff,
+        Manifolds,
+        FastCholesky
 
     rng = StableRNG(42)
     for distribution in [
@@ -35,9 +37,7 @@ end
             Poisson(0.5),
             Chisq(30.0),
             Gamma(1, 1),
-        ],
-        nsamples in (100, 500)
-
+        ],nsamples in (100, 500)
         ef = convert(ExponentialFamilyDistribution, distribution)
         samples = rand(rng, ef, nsamples)
 
@@ -63,7 +63,7 @@ end
 
         _logpartition = logpartition(ef)
         _gradlogpartition = gradlogpartition(ef)
-        _inv_fisher = inv(fisherinformation(ef))
+        _inv_fisher = cholinv(fisherinformation(ef))
         cost = ExponentialFamilyProjection.compute_cost(
             M,
             strategy,
@@ -97,5 +97,20 @@ end
 
         @test cost ≈ expected_cost
         @test gradient ≈ (_inv_fisher * expected_gradient)
+
+        # Test gradient computation in manifold coordinates
+        p = ExponentialFamilyManifolds.partition_point(M, η)
+        expected_gradient_p = ForwardDiff.gradient(p) do p_new
+            ef_new = convert(ExponentialFamilyDistribution, M, p_new)
+            return -mean(logpdf(ef_new, samples))
+        end
+        X_p = Manifolds.zero_vector(M, p)
+        c_p, X_p = obj(M, X_p, p)
+        @test c_p ≈ cost
+        if distribution isa Gamma
+            @test_broken X_p ≈ _inv_fisher * expected_gradient_p
+        else
+            @test X_p ≈ _inv_fisher * expected_gradient_p
+        end
     end
 end
