@@ -33,8 +33,10 @@ get_strategy(obj::ProjectionCostGradientObjective) = obj.strategy
 get_strategy_state(obj::ProjectionCostGradientObjective) = obj.strategy_state
 
 function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
-    current_η = copyto!(get_current_η(objective), p)
-    current_ef = convert(ExponentialFamilyDistribution, M, current_η)
+    p_copy = similar(p)
+    copyto!(p_copy, p)
+    current_ef = convert(ExponentialFamilyDistribution, M, p_copy)
+    current_η = copyto!(get_current_η(objective), getnaturalparameters(current_ef))
 
     strategy = get_strategy(objective)
     state = get_strategy_state(objective)
@@ -55,14 +57,15 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
     logpartition = ExponentialFamily.logpartition(current_ef)
     gradlogpartition = ExponentialFamily.gradlogpartition(current_ef)
     inv_fisher = cholinv(ExponentialFamily.fisherinformation(current_ef))
-    η = copy(ExponentialFamily.getnaturalparameters(current_ef))
 
     # If we have some supplementary natural parameters in the objective 
     # we must subtract them from the natural parameters of the current η
+    # @show "current_η before substraction", current_η
     foreach(supplementary_η) do s_η
         vmap!(-, current_η, current_η, s_η)
     end
-
+    # @show "current_η after substraction", current_η
+    # @show "Call before cost"
     c = compute_cost(
         M,
         strategy,
@@ -72,7 +75,9 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
         gradlogpartition,
         inv_fisher,
     )
-    X = compute_gradient!(
+    # @show "Cost $c"
+    # error("The gradient is broken")
+    X_nat = compute_gradient!(
         M,
         strategy,
         state,
@@ -82,9 +87,9 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
         gradlogpartition,
         inv_fisher,
     )
-    X = project!(M, X, p, X)
-
-    return c, X
+    X_p = ExponentialFamilyManifolds.partition_point(M, X_nat)
+    X_p = project!(M, X_p, p, X_p)
+    return c, X_p
 end
 
 
