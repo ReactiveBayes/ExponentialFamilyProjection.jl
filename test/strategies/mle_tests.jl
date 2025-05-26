@@ -45,13 +45,13 @@ end
         c = getconditioner(ef)
         d = size(rand(rng, ef))
         M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
-        p = ProjectionParameters()
+        proj_params = ProjectionParameters()
         η = getnaturalparameters(ef)
 
         strategy = ExponentialFamilyProjection.MLEStrategy()
-        state = ExponentialFamilyProjection.create_state!(strategy, M, p, samples, ef, ())
+        state = ExponentialFamilyProjection.create_state!(strategy, M, proj_params, samples, ef, ())
         obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
-            p,
+            proj_params,
             samples,
             copy(η),
             (),
@@ -89,9 +89,10 @@ end
 
         _, samples_container = ExponentialFamily.check_logpdf(ef, samples)
         expected_cost = -mean(logpdf(ef, samples))
-        expected_gradient = ForwardDiff.gradient(η) do p
-            ef = convert(ExponentialFamilyDistribution, M, p)
-            return -mean(logpdf(ef, samples))
+        expected_gradient = ForwardDiff.gradient(η) do η_new
+            p_new = ExponentialFamilyManifolds.partition_point(M, η_new)
+            ef_new = convert(ExponentialFamilyDistribution, M, p_new)
+            return -mean(logpdf(ef_new, samples))
         end
 
         @test cost ≈ expected_cost
