@@ -22,7 +22,9 @@ end
         ExponentialFamilyManifolds,
         ExponentialFamilyProjection,
         StableRNGs,
-        ForwardDiff
+        ForwardDiff,
+        Manifolds,
+        FastCholesky
 
     rng = StableRNG(42)
     for distribution in [
@@ -35,9 +37,7 @@ end
             Poisson(0.5),
             Chisq(30.0),
             Gamma(1, 1),
-        ],
-        nsamples in (100, 500)
-
+        ],nsamples in (100, 500)
         ef = convert(ExponentialFamilyDistribution, distribution)
         samples = rand(rng, ef, nsamples)
 
@@ -45,13 +45,13 @@ end
         c = getconditioner(ef)
         d = size(rand(rng, ef))
         M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
-        p = ProjectionParameters()
+        proj_params = ProjectionParameters()
         η = getnaturalparameters(ef)
 
         strategy = ExponentialFamilyProjection.MLEStrategy()
-        state = ExponentialFamilyProjection.create_state!(strategy, M, p, samples, ef, ())
+        state = ExponentialFamilyProjection.create_state!(strategy, M, proj_params, samples, ef, ())
         obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
-            p,
+            proj_params,
             samples,
             copy(η),
             (),
@@ -63,7 +63,7 @@ end
 
         _logpartition = logpartition(ef)
         _gradlogpartition = gradlogpartition(ef)
-        _inv_fisher = inv(fisherinformation(ef))
+        _inv_fisher = cholinv(fisherinformation(ef))
         cost = ExponentialFamilyProjection.compute_cost(
             M,
             strategy,
@@ -89,12 +89,28 @@ end
 
         _, samples_container = ExponentialFamily.check_logpdf(ef, samples)
         expected_cost = -mean(logpdf(ef, samples))
-        expected_gradient = ForwardDiff.gradient(η) do p
-            ef = convert(ExponentialFamilyDistribution, M, p)
-            return -mean(logpdf(ef, samples))
+        expected_gradient = ForwardDiff.gradient(η) do η_new
+            p_new = ExponentialFamilyManifolds.partition_point(M, η_new)
+            ef_new = convert(ExponentialFamilyDistribution, M, p_new)
+            return -mean(logpdf(ef_new, samples))
         end
 
         @test cost ≈ expected_cost
         @test gradient ≈ (_inv_fisher * expected_gradient)
+
+        # Test gradient computation in manifold coordinates
+        p = ExponentialFamilyManifolds.partition_point(M, η)
+        expected_gradient_p = ForwardDiff.gradient(p) do p_new
+            ef_new = convert(ExponentialFamilyDistribution, M, p_new)
+            return -mean(logpdf(ef_new, samples))
+        end
+        X_p = Manifolds.zero_vector(M, p)
+        c_p, X_p = obj(M, X_p, p)
+        @test c_p ≈ cost
+        if distribution isa Gamma
+            @test_broken X_p ≈ _inv_fisher * expected_gradient_p
+        else
+            @test X_p ≈ _inv_fisher * expected_gradient_p
+        end
     end
 end

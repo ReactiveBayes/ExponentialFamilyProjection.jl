@@ -271,9 +271,9 @@ function project_to(
         getstrategy(projection_parameters),
         projection_argument,
     )
-    current_η = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
-    check_inputs(prj, projection_argument, supplementary...; initialpoint = current_η, kwargs...)
-    current_ef = convert(ExponentialFamilyDistribution, M, current_η)
+    current_iteration_point = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
+    check_inputs(prj, projection_argument, supplementary...; initialpoint = current_iteration_point, kwargs...)
+    current_ef = convert(ExponentialFamilyDistribution, M, current_iteration_point)
     state = create_state!(
         strategy,
         M,
@@ -305,7 +305,7 @@ function project_to(
         supplementary_η,
         strategy,
         state,
-        current_η,
+        current_iteration_point,
         prj_kwargs,
     )
 end
@@ -320,13 +320,13 @@ function _kernel_project_to(
     supplementary_η,
     strategy,
     state,
-    current_η,
+    current_iteration_point,
     kwargs,
 ) where {T}
     g_grad_g! = ProjectionCostGradientObjective(
         projection_parameters,
         projection_argument,
-        copy(current_η),
+        copy(current_iteration_point),
         supplementary_η,
         strategy,
         state,
@@ -335,13 +335,13 @@ function _kernel_project_to(
 
     # `gradient_descent!` is a type-unstable call, so better not to use `q = gradient_descent!`
     # `gradient_descent!` will override `q` instead
-    q = current_η
+    q = current_iteration_point
     direction = getdirection(projection_parameters)
     inited_direction = init_direction_rule(direction, M)
     gradient_descent!(
         M,
         objective,
-        current_η;
+        current_iteration_point;
         stopping_criterion = get_stopping_criterion(projection_parameters),
         stepsize = getstepsize(projection_parameters),
         direction = inited_direction,

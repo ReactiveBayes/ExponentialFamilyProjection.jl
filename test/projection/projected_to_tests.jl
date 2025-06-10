@@ -753,4 +753,4 @@ end
     ncalls_inplace = ncalls
     @test ncalls_batch == ncalls_inplace // batch_size
     @test result_batch ≈ result_inplace
-end 
+end

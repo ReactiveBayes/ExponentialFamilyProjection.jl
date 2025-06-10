@@ -78,7 +78,7 @@ end
 function (fn::MLETargetFn)(η)
     # This function essentially computes the negative average of `logpdf` of all provided `samples`
     # with the distribution defined in `η`
-    ef = convert(ExponentialFamilyDistribution, fn.manifold, η)
+    ef = convert(ExponentialFamilyDistribution, fn.manifold, ExponentialFamilyManifolds.partition_point(fn.manifold, η))
     _, samples_container = ExponentialFamily.check_logpdf(ef, fn.samples)
     # We use precomputed `sufficientstatistics` since in this strategy the `samples` are fixed
     sufficientstatistics_container = eachcol(fn.sufficientstatistics)
@@ -100,7 +100,7 @@ function compute_cost(
     _,
     _,
     _,
-)
+)   
     return gettargetfn(state)(η)
 end
 
@@ -114,11 +114,9 @@ function compute_gradient!(
     _,
     inv_fisher,
 )
-    ef = convert(ExponentialFamilyDistribution, M, η)
+    ef = convert(ExponentialFamilyDistribution, M, ExponentialFamilyManifolds.partition_point(M, η))
     targetfn = gettargetfn(state)
     mean_sufficient_stats = mean(targetfn.sufficientstatistics, dims = 2)
-    
-    # The gradient for MLE is: E[T(x)] - ∇A(η)
     G = -view(mean_sufficient_stats, :, 1) + gradlogpartition(ef)
     X = mul!(X, inv_fisher, G)
     return X

@@ -25,6 +25,9 @@ include("manopt/bounded_norm_update_rule.jl")
 include("manopt/projection_objective.jl")
 include("projected_to.jl")
 
+### jacobian from natural to manifold
+include("jacobians.jl")
+
 """
     preprocess_strategy_argument(strategy, argument)
 
