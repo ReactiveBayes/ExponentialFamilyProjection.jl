@@ -32,9 +32,7 @@ get_strategy(obj::ProjectionCostGradientObjective) = obj.strategy
 get_strategy_state(obj::ProjectionCostGradientObjective) = obj.strategy_state
 
 function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
-    p_copy = deepcopy(p)
-    copyto!(p_copy, p)
-    current_ef = convert(ExponentialFamilyDistribution, M, p_copy)
+    current_ef = convert(ExponentialFamilyDistribution, M, p)
     current_η = copyto!(get_current_η(objective), getnaturalparameters(current_ef))
 
     strategy = get_strategy(objective)
@@ -59,12 +57,10 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
 
     # If we have some supplementary natural parameters in the objective 
     # we must subtract them from the natural parameters of the current η
-    # @show "current_η before substraction", current_η
     foreach(supplementary_η) do s_η
         vmap!(-, current_η, current_η, s_η)
     end
-    # @show "current_η after substraction", current_η
-    # @show "Call before cost"
+
     c = compute_cost(
         M,
         strategy,
@@ -74,8 +70,7 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
         gradlogpartition,
         inv_fisher,
     )
-    # @show "Cost $c"
-    # error("The gradient is broken")
+
     X_nat = compute_gradient!(
         M,
         strategy,
