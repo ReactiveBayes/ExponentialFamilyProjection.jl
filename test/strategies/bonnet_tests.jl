@@ -1088,3 +1088,4 @@ end
         @test length(get_current_mean(state)) == 2
     end
 end
+

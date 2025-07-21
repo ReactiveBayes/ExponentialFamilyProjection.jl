@@ -1,4 +1,5 @@
-using ExponentialFamily, Distributions, BayesBase, StableRNGs, RollingFunctions, Manopt
+using ExponentialFamily, Distributions, BayesBase, StableRNGs, RollingFunctions, Manopt, ForwardDiff
+import ExponentialFamilyProjection: InplaceLogpdfGradHess, BonnetStrategy
 
 function test_projection_mle(
     distribution;
@@ -363,5 +364,133 @@ function test_convergence_to_stable_point(
     end
 
     return true
+end
+
+# Helper function to create InplaceLogpdfGradHess for BonnetStrategy testing
+function create_bonnet_target(distribution)
+    
+    if distribution isa NormalMeanVariance
+        # Univariate case
+        logpdf_fn = (out, x) -> (out[1] = logpdf(distribution, x))
+        grad_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> (out[1] = ForwardDiff.derivative(x -> logpdf(distribution, x), x))
+        end
+        hess_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> (out[1] = ForwardDiff.derivative(x -> ForwardDiff.derivative(x -> logpdf(distribution, x), x), x))
+        end
+    else
+        # Multivariate case
+        logpdf_fn = (out, x) -> (out[1] = logpdf(distribution, x))
+        grad_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> ForwardDiff.gradient!(out, x -> logpdf(distribution, x), x)
+        end
+        hess_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> ForwardDiff.hessian!(out, x -> logpdf(distribution, x), x)
+        end
+    end
+    return InplaceLogpdfGradHess(logpdf_fn, grad_fn, hess_fn)
+end
+
+# Convergence test for BonnetStrategy
+function test_bonnet_projection_convergence(
+    distribution;
+    to = missing,
+    dims = missing,
+    conditioner = missing,
+    nsamples_range = _convergence_nsamples_default_range(distribution),
+    nsamples_tolerance = _convergence_nsamples_default_tolerance(distribution),
+    nsamples_niterations = _convergence_nsamples_default_niterations(distribution),
+    nsamples_required_accuracy = 1e-1,
+    nsamples_stepsize = ConstantLength(0.1),
+    nsamples_rng = StableRNG(42),
+    kwargs...,
+)
+    T = ismissing(to) ?
+        ExponentialFamily.exponential_family_typetag(
+            convert(ExponentialFamilyDistribution, distribution),
+        ) : to
+    dims = ismissing(dims) ? size(rand(StableRNG(42), distribution)) : dims
+    conditioner = ismissing(conditioner) ?
+        getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
+
+    bonnet_target = create_bonnet_target(distribution)
+
+    experiment = map(nsamples_range) do nsamples
+        parameters = ProjectionParameters(
+            strategy = BonnetStrategy(nsamples = nsamples),
+            niterations = nsamples_niterations,
+            tolerance = nsamples_tolerance,
+            stepsize = nsamples_stepsize,
+            seed = rand(nsamples_rng, UInt),
+        )
+        projection = ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
+        approximated = project_to(projection, bonnet_target)
+        divergence = test_convergence_metric(approximated, distribution)
+        return divergence, approximated
+    end
+
+    divergence = map(e -> e[1], experiment)
+    approximated = map(e -> e[2], experiment)
+
+    test_required_accuracy = any(<(nsamples_required_accuracy), divergence)
+
+    if !test_required_accuracy
+        @warn "`nsamples` accuracy test for BonnetStrategy with `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+    end
+
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`nsamples` convergence test for BonnetStrategy with $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
+end
+
+# Test convergence for different niterations with BonnetStrategy (fixed nsamples)
+function test_bonnet_niterations_convergence(
+    distribution;
+    niterations_range = _convergence_niterations_default_range(distribution),
+    niterations_tolerance = _convergence_niterations_default_tolerance(distribution),
+    niterations_nsamples = _convergence_niterations_default_nsamples(distribution),
+    niterations_required_accuracy = 1e-1,
+    niterations_stepsize = ConstantLength(0.1),
+    niterations_rng = StableRNG(42),
+    kwargs...
+)
+    bonnet_target = create_bonnet_target(distribution)
+
+    experiment = map(niterations_range) do niterations
+        parameters = ProjectionParameters(
+            strategy = BonnetStrategy(nsamples = niterations_nsamples),
+            niterations = niterations,
+            tolerance = niterations_tolerance,
+            stepsize = niterations_stepsize,
+            seed = rand(niterations_rng, UInt),
+        )
+        projection = ProjectedTo(NormalMeanVariance, parameters = parameters)
+        approximated = project_to(projection, bonnet_target)
+        divergence = test_convergence_metric(approximated, distribution)
+        return divergence, approximated
+    end
+
+    divergence = map(e -> e[1], experiment)
+    approximated = map(e -> e[2], experiment)
+
+    test_required_accuracy = any(<(niterations_required_accuracy), divergence)
+
+    if !test_required_accuracy
+        @warn "`niterations` accuracy test for BonnetStrategy with `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+    end
+
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`niterations` convergence test for BonnetStrategy with $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
 end
 
