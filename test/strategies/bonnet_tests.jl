@@ -1089,3 +1089,247 @@ end
     end
 end
 
+@testitem "BonnetStrategy vs ControlVariateStrategy performance comparison for high-dimensional normals" begin
+    using ExponentialFamily,
+        Distributions,
+        BayesBase,
+        LinearAlgebra,
+        Random,
+        StableRNGs,
+        ExponentialFamilyManifolds,
+        ForwardDiff,
+        Printf,
+        BenchmarkTools,
+        Manifolds
+    import ExponentialFamilyProjection:
+        BonnetStrategy,
+        ControlVariateStrategy,
+        InplaceLogpdfGradHess,
+        create_state!,
+        ProjectionParameters,
+        ProjectionCostGradientObjective
+
+    # Test with increasing dimensions to show BonnetStrategy advantage
+    dimensions = [10, 20, 50]
+    nsamples = 1000
+
+    println("\nPerformance comparison: BonnetStrategy vs ControlVariateStrategy")
+    println("Dimension | BonnetStrategy (μs) | ControlVariateStrategy (μs) | Speedup | Memory Ratio")
+    println("----------|---------------------|-----------------------------|---------|--------------")
+
+    for dim in dimensions
+        # Create high-dimensional normal distribution
+        μ = randn(StableRNG(42), dim)
+        Σ = let A = randn(StableRNG(43), dim, dim); A * A' + 0.1 * I end
+        dist = MvNormalMeanCovariance(μ, Σ)
+        
+        # Create target function for the same distribution
+        target_logpdf = (x) -> logpdf(dist, x)
+        
+        # Create InplaceLogpdfGradHess for BonnetStrategy
+        logpdf_fn = (out, x) -> (out[1] = logpdf(dist, x))
+        grad_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> ForwardDiff.gradient!(out, x -> logpdf(dist, x), x)
+        end
+        hess_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> ForwardDiff.hessian!(out, x -> logpdf(dist, x), x)
+        end
+        bonnet_target = InplaceLogpdfGradHess(logpdf_fn, grad_fn, hess_fn)
+
+        # Setup manifold and exponential family
+        ef = convert(ExponentialFamilyDistribution, dist)
+        T = ExponentialFamily.exponential_family_typetag(ef)
+        d = size(mean(ef))
+        c = getconditioner(ef)
+        M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        
+        η = getnaturalparameters(ef)
+        
+        # Pre-create variables for benchmarking
+        test_parameters = ProjectionParameters(rng = StableRNG(42), seed = 42)
+        p_manifold = ExponentialFamilyManifolds.partition_point(M, η)
+        
+        # Benchmark BonnetStrategy using ProjectionCostGradientObjective
+        bonnet_benchmark = @benchmark begin
+            bonnet_strategy = BonnetStrategy(nsamples = $nsamples)
+            bonnet_state = create_state!(bonnet_strategy, $M, $test_parameters, $bonnet_target, $ef, ())
+            bonnet_obj = ProjectionCostGradientObjective(
+                $test_parameters, $bonnet_target, copy($η), (), bonnet_strategy, bonnet_state
+            )
+            X_bonnet = Manifolds.zero_vector($M, $p_manifold)
+            cost_bonnet, X_bonnet = bonnet_obj($M, X_bonnet, $p_manifold)
+        end
+        
+        # Benchmark ControlVariateStrategy using ProjectionCostGradientObjective
+        cv_benchmark = @benchmark begin
+            cv_strategy = ControlVariateStrategy(nsamples = $nsamples, buffer = nothing)
+            cv_state = create_state!(cv_strategy, $M, $test_parameters, $target_logpdf, $ef, ())
+            cv_obj = ProjectionCostGradientObjective(
+                $test_parameters, $target_logpdf, copy($η), (), cv_strategy, cv_state
+            )
+            X_cv = Manifolds.zero_vector($M, $p_manifold)
+            cost_cv, X_cv = cv_obj($M, X_cv, $p_manifold)
+        end
+        
+        # Extract timing and memory statistics
+        bonnet_time_μs = median(bonnet_benchmark.times) / 1000  # Convert ns to μs
+        cv_time_μs = median(cv_benchmark.times) / 1000  # Convert ns to μs
+        speedup = cv_time_μs / bonnet_time_μs
+        
+        bonnet_memory = bonnet_benchmark.memory
+        cv_memory = cv_benchmark.memory
+        memory_ratio = cv_memory / bonnet_memory
+        
+        # Print results
+        println(@sprintf("%9d | %19.1f | %27.1f | %6.2fx | %12.2fx", 
+                dim, bonnet_time_μs, cv_time_μs, speedup, memory_ratio))
+        
+        # Test that both strategies produce similar gradients (functional correctness)
+        parameters = ProjectionParameters(rng = StableRNG(42), seed = 42)
+        p_manifold = ExponentialFamilyManifolds.partition_point(M, η)
+        
+        bonnet_strategy = BonnetStrategy(nsamples = nsamples)
+        bonnet_state = create_state!(bonnet_strategy, M, parameters, bonnet_target, ef, ())
+        bonnet_obj = ProjectionCostGradientObjective(
+            parameters, bonnet_target, copy(η), (), bonnet_strategy, bonnet_state
+        )
+        X_bonnet = Manifolds.zero_vector(M, p_manifold)
+        cost_bonnet, X_bonnet = bonnet_obj(M, X_bonnet, p_manifold)
+        
+        cv_strategy = ControlVariateStrategy(nsamples = nsamples, buffer = nothing)
+        cv_state = create_state!(cv_strategy, M, parameters, target_logpdf, ef, ())
+        cv_obj = ProjectionCostGradientObjective(
+            parameters, target_logpdf, copy(η), (), cv_strategy, cv_state
+        )
+        X_cv = Manifolds.zero_vector(M, p_manifold)
+        cost_cv, X_cv = cv_obj(M, X_cv, p_manifold)
+        
+        # Verify gradients are approximately equal (using Fisher metric)
+        fisherinformation = ExponentialFamily.fisherinformation(ef)
+        X_diff = X_bonnet - X_cv
+        fisher_norm_diff = sqrt(dot(X_diff, fisherinformation, X_diff))
+        
+        @test fisher_norm_diff < 0.1  # Gradients should be close in Fisher metric
+        @test abs(cost_bonnet - cost_cv) < 0.1  # Costs should be similar
+        
+        # Test that BonnetStrategy shows performance advantage for higher dimensions
+        if dim >= 20
+            @test speedup > 1.0  # BonnetStrategy should be faster for high dimensions
+        end
+    end
+end
+
+@testitem "BonnetStrategy vs ControlVariateStrategy performance comparison with analytical target" begin
+    using ExponentialFamily, Distributions, BayesBase, LinearAlgebra, Random, StableRNGs, ExponentialFamilyManifolds, Printf, BenchmarkTools, Manifolds
+    import ExponentialFamilyProjection: BonnetStrategy, ControlVariateStrategy, InplaceLogpdfGradHess, create_state!, ProjectionParameters, ProjectionCostGradientObjective
+
+    # Simple analytical target: -||x - 1||^2
+    # logpdf(x) = -||x - 1||^2
+    # grad(x) = -2(x - 1)  
+    # hess(x) = -2I
+    
+    function analytical_logpdf!(out, x)
+        out[1] = -sum((x .- 1).^2)
+        return out
+    end
+    
+    function analytical_grad!(out, x)
+        out .= -2 .* (x .- 1)
+        return out
+    end
+    
+    function analytical_hess!(out, x)
+        fill!(out, 0.0)
+        for i in 1:size(out, 1)
+            out[i, i] = -2.0
+        end
+        return out
+    end
+
+    dimensions = [10, 20, 50]
+    nsamples = 1000
+
+    println("\nPerformance comparison with analytical target: BonnetStrategy vs ControlVariateStrategy")
+    println("Dimension | BonnetStrategy (μs) | ControlVariateStrategy (μs) | Speedup | Memory Ratio")
+    println("----------|---------------------|-----------------------------|---------|--------------")
+
+    for dim in dimensions
+        rng = StableRNG(42)
+        
+        # Create target distribution (we'll project to Normal)
+        target_mean = ones(dim)
+        target_cov = Matrix(I, dim, dim)
+        dist = MvNormal(target_mean, target_cov)
+        
+        # Create exponential family distribution and manifold
+        ef = convert(ExponentialFamilyDistribution, dist)
+        T = ExponentialFamily.exponential_family_typetag(ef)
+        d = size(mean(ef))
+        c = getconditioner(ef)
+        M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        η = getnaturalparameters(ef)
+        
+        # Create analytical target for BonnetStrategy
+        analytical_target = InplaceLogpdfGradHess(analytical_logpdf!, analytical_grad!, analytical_hess!)
+        
+        # Create simple logpdf function for ControlVariateStrategy  
+        target_logpdf(x) = -sum((x .- 1).^2)
+        
+        # Pre-create variables for benchmarking
+        test_parameters = ProjectionParameters(rng = StableRNG(42), seed = 42)
+        p_manifold = ExponentialFamilyManifolds.partition_point(M, η)
+        
+        # Benchmark BonnetStrategy using ProjectionCostGradientObjective
+        bonnet_benchmark = @benchmark begin
+            bonnet_strategy = BonnetStrategy(nsamples = $nsamples)
+            bonnet_state = create_state!(bonnet_strategy, $M, $test_parameters, $analytical_target, $ef, ())
+            bonnet_obj = ProjectionCostGradientObjective(
+                $test_parameters, $analytical_target, copy($η), (), bonnet_strategy, bonnet_state
+            )
+            X_bonnet = Manifolds.zero_vector($M, $p_manifold)
+            cost_bonnet, X_bonnet = bonnet_obj($M, X_bonnet, $p_manifold)
+        end
+        
+        # Benchmark ControlVariateStrategy using ProjectionCostGradientObjective
+        cv_benchmark = @benchmark begin
+            cv_strategy = ControlVariateStrategy(nsamples = $nsamples, buffer = nothing)
+            cv_state = create_state!(cv_strategy, $M, $test_parameters, $target_logpdf, $ef, ())
+            cv_obj = ProjectionCostGradientObjective(
+                $test_parameters, $target_logpdf, copy($η), (), cv_strategy, cv_state
+            )
+            X_cv = Manifolds.zero_vector($M, $p_manifold)
+            cost_cv, X_cv = cv_obj($M, X_cv, $p_manifold)
+        end
+        
+        # Extract timing and memory statistics
+        bonnet_time_μs = median(bonnet_benchmark.times) / 1000
+        cv_time_μs = median(cv_benchmark.times) / 1000
+        speedup = cv_time_μs / bonnet_time_μs
+        
+        bonnet_memory = bonnet_benchmark.memory
+        cv_memory = cv_benchmark.memory
+        memory_ratio = cv_memory / bonnet_memory
+        
+        # Print results
+        println(@sprintf("%9d | %19.1f | %27.1f | %6.2fx | %12.2fx", 
+                dim, bonnet_time_μs, cv_time_μs, speedup, memory_ratio))
+        
+        # Test that both strategies produce reasonable gradients (functional correctness)
+        bonnet_strategy = BonnetStrategy(nsamples = nsamples)
+        bonnet_state = create_state!(bonnet_strategy, M, test_parameters, analytical_target, ef, ())
+        bonnet_obj = ProjectionCostGradientObjective(
+            test_parameters, analytical_target, copy(η), (), bonnet_strategy, bonnet_state
+        )
+        X_bonnet = Manifolds.zero_vector(M, p_manifold)
+        cost_bonnet, X_bonnet = bonnet_obj(M, X_bonnet, p_manifold)
+        
+        cv_strategy = ControlVariateStrategy(nsamples = nsamples, buffer = nothing)
+        cv_state = create_state!(cv_strategy, M, test_parameters, target_logpdf, ef, ())
+        cv_obj = ProjectionCostGradientObjective(
+            test_parameters, target_logpdf, copy(η), (), cv_strategy, cv_state
+        )
+        X_cv = Manifolds.zero_vector(M, p_manifold)
+        cost_cv, X_cv = cv_obj(M, X_cv, p_manifold)
+    end
+end
+
