@@ -44,6 +44,65 @@ get_grads(state::BonnetStrategyState) = state.grads
 get_hessians(state::BonnetStrategyState) = state.hessians
 get_current_mean(state::BonnetStrategyState) = state.current_mean
 
+function create_state!(
+    strategy::BonnetStrategy,
+    M::AbstractManifold,
+    parameters::ProjectionParameters,
+    projection_argument,
+    initial_ef,
+    supplementary_η,
+)
+    # Create containers for the BonnetStrategy state
+    nsamples = get_nsamples(strategy)
+    rng = getrng(parameters)
+    
+    # Prepare containers following the same pattern as ControlVariateStrategy
+    samples = prepare_samples_container(rng, initial_ef, nsamples, supplementary_η)
+    logpdfs = prepare_logpdfs_container(rng, initial_ef, nsamples, supplementary_η)
+    grads = prepare_grads_container(rng, initial_ef, nsamples, supplementary_η)
+    hessians = prepare_hessians_container(rng, initial_ef, nsamples, supplementary_η)
+    current_mean = prepare_current_mean_container(rng, initial_ef, supplementary_η)
+
+    state = BonnetStrategyState(
+        samples = samples,
+        logpdfs = logpdfs,
+        grads = grads,
+        hessians = hessians,
+        current_mean = current_mean,
+    )
+
+    return prepare_state!(
+        strategy,
+        state,
+        M,
+        parameters,
+        projection_argument,
+        initial_ef,
+        supplementary_η,
+    )
+end
+
+# Helper functions to prepare containers for BonnetStrategy
+prepare_samples_container(rng, distribution, nsamples, supplementary_η) =
+    rand(rng, distribution, nsamples)
+prepare_logpdfs_container(rng, distribution, nsamples, supplementary_η) =
+    zeros(paramfloattype(distribution), nsamples)
+prepare_grads_container(rng, distribution, nsamples, supplementary_η) =
+    zeros(
+        paramfloattype(distribution),
+        length(mean(distribution)),  # dimension of the sample space
+        nsamples,
+    )
+prepare_hessians_container(rng, distribution, nsamples, supplementary_η) =
+    zeros(
+        paramfloattype(distribution),
+        length(mean(distribution)),  # dimension of the sample space
+        length(mean(distribution)),  # dimension of the sample space  
+        nsamples,
+    )
+prepare_current_mean_container(rng, distribution, supplementary_η) =
+    zeros(paramfloattype(distribution), length(mean(distribution)))
+
 function prepare_state!(
     ::BonnetStrategy{S,TL},
     state::BonnetStrategyState,

@@ -493,9 +493,6 @@ end
     Σ = [2.0 0.5; 0.5 1.0]
     dist = MvNormalMeanCovariance(μ, Σ)
     
-    # Create target function: multivariate quadratic -(x₁-1)² - (x₂-2)²
-    targetfn = (x) -> -(x[1] - 1)^2 - (x[2] - 2)^2
-    
     # Create InplaceLogpdfGradHess manually
     logpdf_fn! = (out, x) -> (out[1] = -(x[1] - 1)^2 - (x[2] - 2)^2)
     grad_fn! = (out, x) -> begin
@@ -592,9 +589,6 @@ end
 
     # Test with univariate normal distribution
     dist = NormalMeanVariance(1.0, 2.0)
-    
-    # Create target function: univariate quadratic -(x-1)²
-    targetfn = (x) -> -(x - 1)^2
     
     # Create InplaceLogpdfGradHess manually
     logpdf_fn! = (out, x) -> (out[1] = -(x - 1)^2)
@@ -819,5 +813,258 @@ end
         @test c_p_bonnet ≈ bonnet_cost
         @test c_p_cv ≈ cv_cost
         @test X_p_bonnet ≈ X_p_cv rtol = 1e-2
+    end
+end
+
+@testitem "BonnetStrategy create_state! tests - Univariate" begin
+    using ExponentialFamily,
+        Distributions,
+        BayesBase,
+        LinearAlgebra,
+        Random,
+        StableRNGs,
+        ExponentialFamilyManifolds,
+        ForwardDiff,
+        Manifolds
+    import ExponentialFamilyProjection:
+        BonnetStrategy,
+        BonnetStrategyState,
+        InplaceLogpdfGradHess,
+        create_state!,
+        prepare_state!,
+        get_samples,
+        get_logpdfs,
+        get_grads,
+        get_hessians,
+        get_current_mean,
+        get_nsamples,
+        ProjectionParameters
+
+    @testset "BonnetStrategy basic properties" begin
+        strategy = BonnetStrategy(nsamples = 100)
+        @test get_nsamples(strategy) === 100
+    end
+
+    @testset "create_state! basic functionality - NormalMeanVariance" begin
+        dist = NormalMeanVariance(0, 1)
+        supplementary_η = ()
+        
+        rng = StableRNG(42)
+        ef = convert(ExponentialFamilyDistribution, dist)
+        T = ExponentialFamily.exponential_family_typetag(ef)
+        d = size(mean(ef))
+        c = getconditioner(ef)
+        M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        parameters = ProjectionParameters(; rng = rng)
+        
+        # Create logpdf function and its derivatives with proper ForwardDiff scoping
+        logpdf_fn = (out, x) -> (out[1] = logpdf(ef, x))
+        
+        # Univariate case - use derivative instead of gradient
+        grad_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> (out[1] = ForwardDiff.derivative(x -> logpdf(ef, x), x))
+        end
+        hess_fn = let ForwardDiff = ForwardDiff  
+            (out, x) -> (out[1] = ForwardDiff.derivative(x -> ForwardDiff.derivative(x -> logpdf(ef, x), x), x))
+        end
+        
+        targetfn = InplaceLogpdfGradHess(logpdf_fn, grad_fn, hess_fn)
+        strategy = BonnetStrategy(nsamples = 100)
+        
+        state1 = create_state!(strategy, M, parameters, targetfn, ef, supplementary_η)
+
+        # Test manual state creation and preparation
+        nsamples = get_nsamples(strategy)
+        sample_dim = length(mean(ef))
+        param_dim = length(getnaturalparameters(ef))
+        
+        # For univariate: samples is a vector, grads/hessians are in parameter space
+        samples = zeros(paramfloattype(ef), nsamples)  # Vector for univariate
+        logpdfs = zeros(paramfloattype(ef), nsamples)
+        grads = zeros(paramfloattype(ef), sample_dim, nsamples)  # 1 x nsamples
+        hessians = zeros(paramfloattype(ef), sample_dim, sample_dim, nsamples)  # 1 x 1 x nsamples
+        current_mean = zeros(paramfloattype(ef), sample_dim)
+        
+        state2 = BonnetStrategyState(
+            samples = samples,
+            logpdfs = logpdfs,
+            grads = grads,
+            hessians = hessians,
+            current_mean = current_mean,
+        )
+        
+        strategy = BonnetStrategy(nsamples = nsamples)
+        state2_prepared = prepare_state!(
+            strategy,
+            state2,
+            M,
+            parameters,
+            targetfn,
+            ef,
+            supplementary_η,
+        )
+
+        @test get_samples(state1) == get_samples(state2)
+        @test get_logpdfs(state1) == get_logpdfs(state2)
+        @test get_grads(state1) == get_grads(state2)
+        @test get_hessians(state1) == get_hessians(state2)
+        @test get_current_mean(state1) == get_current_mean(state2)
+    end
+
+    @testset "State content validation - NormalMeanVariance" begin
+        rng = StableRNG(42)
+        dist = NormalMeanVariance(0, 1)
+        ef = convert(ExponentialFamilyDistribution, dist)
+        T = ExponentialFamily.exponential_family_typetag(ef)
+        d = size(mean(ef))
+        c = getconditioner(ef)
+        M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        parameters = ProjectionParameters(; rng = rng)
+        
+        # Create logpdf function and its derivatives with proper ForwardDiff scoping
+        logpdf_fn = (out, x) -> (out[1] = logpdf(ef, x))
+        
+        # Univariate case - use derivative instead of gradient
+        grad_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> (out[1] = ForwardDiff.derivative(x -> logpdf(ef, x), x))
+        end
+        hess_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> (out[1] = ForwardDiff.derivative(x -> ForwardDiff.derivative(x -> logpdf(ef, x), x), x))
+        end
+        
+        targetfn = InplaceLogpdfGradHess(logpdf_fn, grad_fn, hess_fn)
+        strategy = BonnetStrategy(nsamples = 10)
+        
+        state = create_state!(strategy, M, parameters, targetfn, ef, ())
+        
+        @test length(get_samples(state)) == 10  # Vector for univariate
+        @test length(get_logpdfs(state)) == 10
+        @test size(get_grads(state)) == (1, 10)  # 1 x nsamples for univariate
+        @test size(get_hessians(state)) == (1, 1, 10)  # 1 x 1 x nsamples for univariate
+        @test length(get_current_mean(state)) == 1
+    end
+end
+
+@testitem "BonnetStrategy create_state! tests - Multivariate" begin
+    using ExponentialFamily,
+        Distributions,
+        BayesBase,
+        LinearAlgebra,
+        Random,
+        StableRNGs,
+        ExponentialFamilyManifolds,
+        ForwardDiff,
+        Manifolds
+    import ExponentialFamilyProjection:
+        BonnetStrategy,
+        BonnetStrategyState,
+        InplaceLogpdfGradHess,
+        create_state!,
+        prepare_state!,
+        get_samples,
+        get_logpdfs,
+        get_grads,
+        get_hessians,
+        get_current_mean,
+        get_nsamples,
+        ProjectionParameters
+
+    @testset "create_state! basic functionality - MvNormalMeanCovariance" begin
+        dist = MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2))))
+        supplementary_η = ()
+        
+        rng = StableRNG(42)
+        ef = convert(ExponentialFamilyDistribution, dist)
+        T = ExponentialFamily.exponential_family_typetag(ef)
+        d = size(mean(ef))
+        c = getconditioner(ef)
+        M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        parameters = ProjectionParameters(; rng = rng)
+        
+        # Create logpdf function and its derivatives with proper ForwardDiff scoping
+        logpdf_fn = (out, x) -> (out[1] = logpdf(ef, x))
+        
+        # Multivariate case - use gradient! and hessian!
+        grad_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> ForwardDiff.gradient!(out, x -> logpdf(ef, x), x)
+        end
+        hess_fn = let ForwardDiff = ForwardDiff  
+            (out, x) -> ForwardDiff.hessian!(out, x -> logpdf(ef, x), x)
+        end
+        
+        targetfn = InplaceLogpdfGradHess(logpdf_fn, grad_fn, hess_fn)
+        strategy = BonnetStrategy(nsamples = 100)
+        
+        state1 = create_state!(strategy, M, parameters, targetfn, ef, supplementary_η)
+
+        # Test manual state creation and preparation
+        nsamples = get_nsamples(strategy)
+        sample_dim = length(mean(ef))
+        param_dim = length(getnaturalparameters(ef))
+        
+        # For multivariate: samples is a matrix, grads/hessians are in sample space
+        samples = zeros(paramfloattype(ef), sample_dim, nsamples)  # Matrix for multivariate
+        logpdfs = zeros(paramfloattype(ef), nsamples)
+        grads = zeros(paramfloattype(ef), sample_dim, nsamples)  # sample_dim x nsamples
+        hessians = zeros(paramfloattype(ef), sample_dim, sample_dim, nsamples)  # sample_dim x sample_dim x nsamples
+        current_mean = zeros(paramfloattype(ef), sample_dim)
+        
+        state2 = BonnetStrategyState(
+            samples = samples,
+            logpdfs = logpdfs,
+            grads = grads,
+            hessians = hessians,
+            current_mean = current_mean,
+        )
+        
+        strategy = BonnetStrategy(nsamples = nsamples)
+        state2_prepared = prepare_state!(
+            strategy,
+            state2,
+            M,
+            parameters,
+            targetfn,
+            ef,
+            supplementary_η,
+        )
+
+        @test get_samples(state1) == get_samples(state2)
+        @test get_logpdfs(state1) == get_logpdfs(state2)
+        @test get_grads(state1) == get_grads(state2)
+        @test get_hessians(state1) == get_hessians(state2)
+        @test get_current_mean(state1) == get_current_mean(state2)
+    end
+
+    @testset "State content validation - MvNormalMeanCovariance" begin
+        rng = StableRNG(42)
+        dist = MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2))))
+        ef = convert(ExponentialFamilyDistribution, dist)
+        T = ExponentialFamily.exponential_family_typetag(ef)
+        d = size(mean(ef))
+        c = getconditioner(ef)
+        M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        parameters = ProjectionParameters(; rng = rng)
+        
+        # Create logpdf function and its derivatives with proper ForwardDiff scoping
+        logpdf_fn = (out, x) -> (out[1] = logpdf(ef, x))
+        
+        # Multivariate case - use gradient! and hessian!
+        grad_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> ForwardDiff.gradient!(out, x -> logpdf(ef, x), x)
+        end
+        hess_fn = let ForwardDiff = ForwardDiff
+            (out, x) -> ForwardDiff.hessian!(out, x -> logpdf(ef, x), x)
+        end
+        
+        targetfn = InplaceLogpdfGradHess(logpdf_fn, grad_fn, hess_fn)
+        strategy = BonnetStrategy(nsamples = 10)
+        
+        state = create_state!(strategy, M, parameters, targetfn, ef, ())
+        
+        @test size(get_samples(state)) == (2, 10)  # Matrix for multivariate
+        @test length(get_logpdfs(state)) == 10
+        @test size(get_grads(state)) == (2, 10)  # sample_dim x nsamples for multivariate
+        @test size(get_hessians(state)) == (2, 2, 10)  # sample_dim x sample_dim x nsamples for multivariate
+        @test length(get_current_mean(state)) == 2
     end
 end
