@@ -1,4 +1,4 @@
-using StableRNGs, LoopVectorization, Bumper, FillArrays, StaticTools
+using StableRNGs, Bumper, FillArrays
 
 import Random: AbstractRNG
 import BayesBase: InplaceLogpdf
@@ -10,14 +10,14 @@ A strategy for gradient descent optimization and gradients computations that res
 
 The following parameters are available:
 * `nsamples = 2000`: The number of samples to use for estimates
-* `buffer = StaticTools.MallocSlabBuffer()`: Advanced option; A buffer for temporary computations
+* `buffer = Bumper.SlabBuffer()`: Advanced option; A buffer for temporary computations
 
 !!! note
     This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
 Base.@kwdef struct ControlVariateStrategy{S, B, TL}
     nsamples::S = 2000
-    buffer::B = StaticTools.MallocSlabBuffer()
+    buffer::B = Bumper.SlabBuffer()
     base_logpdf_type::Type{TL}  = InplaceLogpdf
 end
 
@@ -184,7 +184,7 @@ function prepare_state!(
         )
 
         @inbounds logpdf = state.logpdfs[i]
-        @turbo warn_check_args = false for j = 1:J
+        for j = 1:J
             @inbounds state.sufficientstatistics[j, i] = sufficientstatistics[j]
             @inbounds state.gradsamples[j, i] =
                 (-state.logbasemeasures[i] + logpdf) *
