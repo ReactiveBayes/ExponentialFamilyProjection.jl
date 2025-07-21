@@ -1310,26 +1310,11 @@ end
         cv_memory = cv_benchmark.memory
         memory_ratio = cv_memory / bonnet_memory
         
-        # Print results
-        println(@sprintf("%9d | %19.1f | %27.1f | %6.2fx | %12.2fx", 
+        println(@sprintf("%9d | %19.1f | %27.1f | %6.2fx | %12.2fx |", 
                 dim, bonnet_time_μs, cv_time_μs, speedup, memory_ratio))
-        
-        # Test that both strategies produce reasonable gradients (functional correctness)
-        bonnet_strategy = BonnetStrategy(nsamples = nsamples)
-        bonnet_state = create_state!(bonnet_strategy, M, test_parameters, analytical_target, ef, ())
-        bonnet_obj = ProjectionCostGradientObjective(
-            test_parameters, analytical_target, copy(η), (), bonnet_strategy, bonnet_state
-        )
-        X_bonnet = Manifolds.zero_vector(M, p_manifold)
-        cost_bonnet, X_bonnet = bonnet_obj(M, X_bonnet, p_manifold)
-        
-        cv_strategy = ControlVariateStrategy(nsamples = nsamples, buffer = nothing)
-        cv_state = create_state!(cv_strategy, M, test_parameters, target_logpdf, ef, ())
-        cv_obj = ProjectionCostGradientObjective(
-            test_parameters, target_logpdf, copy(η), (), cv_strategy, cv_state
-        )
-        X_cv = Manifolds.zero_vector(M, p_manifold)
-        cost_cv, X_cv = cv_obj(M, X_cv, p_manifold)
+
+        @test speedup > 1.0
+        @test memory_ratio > 1.0
     end
 end
 
