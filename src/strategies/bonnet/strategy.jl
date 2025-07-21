@@ -1,4 +1,4 @@
-using StableRNGs, FillArrays, StaticTools
+using StableRNGs
 
 import Random: AbstractRNG
 
@@ -65,9 +65,9 @@ function prepare_state!(
         hess!(inplace_projection_argument!, view(get_hessians(state), :, :, i), sample)
     end
     
-    current_nat_param = getnatparam(current_ef)
-    η_1 = view(current_nat_param, 1:dim_size)
-    η_2 = view(current_nat_param, dim_size+1:length(current_nat_param))
-    state.current_mean .= (-2η_2) \ η_1
+    current_nat_param = getnaturalparameters(current_ef)
+    exponential_family_typetag = ExponentialFamily.exponential_family_typetag(current_ef)
+    η1, η2 = ExponentialFamily.unpack_parameters(exponential_family_typetag, current_nat_param)
+    state.current_mean .= (-2η2) \ η1
     return state
 end

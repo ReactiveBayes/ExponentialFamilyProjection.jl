@@ -235,6 +235,7 @@ end
         Distributions,
         BayesBase,
         LinearAlgebra,
+        Random,
         StableRNGs,
         ExponentialFamilyManifolds
     import ExponentialFamilyProjection:
@@ -301,56 +302,34 @@ end
     parameters = ProjectionParameters(rng = rng)
     
     # Test prepare_state! (ignoring the current_mean computation for now due to dim_size issue)
-    # We'll focus on testing that the containers are filled correctly
+    prepare_state!(strategy, state, M, parameters, inplace_target, ef, getnaturalparameters(ef))
     
-    # Manually call the parts that should work
-    Random.seed!(rng, 42)
-    Random.rand!(rng, ef, get_samples(state))
-    
+    # Test that the containers are filled correctly
+    @test all(isfinite, get_logpdfs(state))
+    @test all(isfinite, get_grads(state))
+    @test all(isfinite, get_hessians(state))
+
     _, sample_container = ExponentialFamily.check_logpdf(ef, get_samples(state))
-    
+
     # Manually evaluate logpdf, grad, hess for each sample to verify
     for (i, sample) in enumerate(sample_container)
         # Test logpdf evaluation
         logpdf_out = zeros(1)
-        logpdf!(inplace_target, logpdf_out, sample)
-        expected_logpdf = -(sample[1] - 1)^2 - (sample[2] - 2)^2
-        @test logpdf_out[1] ≈ expected_logpdf
+        ExponentialFamilyProjection.logpdf!(inplace_target, logpdf_out, sample)
+        @test logpdf_out[1] ≈ get_logpdfs(state)[i]
         
         # Test gradient evaluation  
         grad_out = zeros(2)
-        grad!(inplace_target, grad_out, sample)
-        expected_grad = [-2 * (sample[1] - 1), -2 * (sample[2] - 2)]
-        @test grad_out ≈ expected_grad
+        ExponentialFamilyProjection.grad!(inplace_target, grad_out, sample)
+        @test grad_out ≈ get_grads(state)[:, i]
         
         # Test hessian evaluation
         hess_out = zeros(2, 2)
-        hess!(inplace_target, hess_out, sample)
-        expected_hess = [-2 0; 0 -2]
-        @test hess_out ≈ expected_hess
-        
-        # Now store in the state containers manually (simulating what prepare_state! should do)
-        get_logpdfs(state)[i] = logpdf_out[1]
-        get_grads(state)[:, i] = grad_out
-        get_hessians(state)[:, :, i] = hess_out
+        ExponentialFamilyProjection.hess!(inplace_target, hess_out, sample)
+        @test hess_out ≈ get_hessians(state)[:, :, i]
     end
-    
-    # Verify that all containers have been filled correctly
-    @test all(isfinite, get_logpdfs(state))
-    @test all(isfinite, get_grads(state))
-    @test all(isfinite, get_hessians(state))
-    
-    # Test that logpdfs match our expected calculation
-    for (i, sample) in enumerate(sample_container)
-        expected_logpdf = -(sample[1] - 1)^2 - (sample[2] - 2)^2
-        @test get_logpdfs(state)[i] ≈ expected_logpdf
-        
-        expected_grad = [-2 * (sample[1] - 1), -2 * (sample[2] - 2)]
-        @test get_grads(state)[:, i] ≈ expected_grad
-        
-        expected_hess = [-2 0; 0 -2]
-        @test get_hessians(state)[:, :, i] ≈ expected_hess
-    end
+
+    @test get_current_mean(state) ≈ mean(dist)
 end
 
 @testitem "BonnetStrategy prepare_state! for univariate normal" begin
