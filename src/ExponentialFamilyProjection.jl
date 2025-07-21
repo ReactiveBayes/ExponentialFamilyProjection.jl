@@ -125,5 +125,6 @@ include("strategies/mle.jl")
 include("strategies/default.jl")
 # Bonnet strategy
 include("strategies/bonnet/bonnet_logpdf.jl")
+include("strategies/bonnet/strategy.jl")
 
 end

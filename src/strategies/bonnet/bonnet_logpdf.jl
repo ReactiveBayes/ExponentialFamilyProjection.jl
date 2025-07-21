@@ -58,3 +58,7 @@ function hess!(inplace::InplaceLogpdfGradHess, out, x)
     inplace.hess!(out, x)
     return out
 end
+
+function convert(::Type{InplaceLogpdfGradHess}, something::InplaceLogpdfGradHess)
+    return something
+end
