@@ -659,3 +659,19 @@ end
     end
     
 end
+
+@testitem "`BonnetStrategy` should fail if given a list of samples instead of a function" begin
+    using ExponentialFamily
+
+    prj = ProjectedTo(
+        NormalMeanVariance;
+        parameters = ProjectionParameters(
+            strategy = ExponentialFamilyProjection.BonnetStrategy(),
+        ),
+    )
+
+    @test_throws "The `BonnetStrategy` requires the projection argument to be a callable object (e.g. `Function`) or an `InplaceLogpdfGradHess`. Got `Vector{Float64}` instead." project_to(
+        prj,
+        [0.5],
+    )
+end
