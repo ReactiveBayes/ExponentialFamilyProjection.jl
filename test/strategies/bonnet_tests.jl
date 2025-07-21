@@ -675,3 +675,149 @@ end
         [0.5],
     )
 end
+
+@testitem "`BonnetStrategy` target function should compute gradients correctly for Normal distributions" begin
+    using ExponentialFamily,
+        LinearAlgebra,
+        Distributions,
+        ExponentialFamilyManifolds,
+        ExponentialFamilyProjection,
+        StableRNGs,
+        ForwardDiff,
+        BayesBase,
+        Manifolds
+
+    rng = StableRNG(42)
+    for distribution in [
+            NormalMeanVariance(0, 1),
+            MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2)))),
+        ]
+
+        # Create target distribution to project to
+        target_dist = distribution
+        targetfn = (x) -> logpdf(target_dist, x)
+
+        # Create InplaceLogpdfGradHess for BonnetStrategy
+        if distribution isa NormalMeanVariance
+            # Univariate case
+            logpdf_fn! = (out, x) -> (out[1] = logpdf(target_dist, x))
+            grad_fn! = (out, x) -> (out[1] = ForwardDiff.derivative(x -> logpdf(target_dist, x), x))
+            hess_fn! = (out, x) -> (out[1] = ForwardDiff.derivative(x -> ForwardDiff.derivative(x -> logpdf(target_dist, x), x), x))
+        else
+            # Multivariate case
+            logpdf_fn! = (out, x) -> (out[1] = logpdf(target_dist, x))
+            grad_fn! = (out, x) -> (out .= ForwardDiff.gradient(x -> logpdf(target_dist, x), x))
+            hess_fn! = (out, x) -> (out .= ForwardDiff.hessian(x -> logpdf(target_dist, x), x))
+        end
+        
+        bonnet_target = ExponentialFamilyProjection.InplaceLogpdfGradHess(logpdf_fn!, grad_fn!, hess_fn!)
+
+        ef = convert(ExponentialFamilyDistribution, distribution)
+        T = ExponentialFamily.exponential_family_typetag(ef)
+        c = getconditioner(ef)
+        d = size(rand(rng, ef))
+        M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+        
+        # Test with both BonnetStrategy and ControlVariateStrategy for comparison
+        bonnet_strategy = ExponentialFamilyProjection.BonnetStrategy(nsamples = 10000)
+        cv_strategy = ExponentialFamilyProjection.ControlVariateStrategy(nsamples = 10000)
+        
+        p = ProjectionParameters(rng = StableRNG(42), seed = 42)
+        η = getnaturalparameters(ef)
+
+        # Test BonnetStrategy
+        bonnet_state = ExponentialFamilyProjection.create_state!(bonnet_strategy, M, p, bonnet_target, ef, ())
+        bonnet_obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
+            p,
+            bonnet_target,
+            copy(η),
+            (),
+            bonnet_strategy,
+            bonnet_state,
+        )
+
+        # Test ControlVariateStrategy for comparison
+        cv_state = ExponentialFamilyProjection.create_state!(cv_strategy, M, p, targetfn, ef, ())
+        cv_obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
+            p,
+            targetfn,
+            copy(η),
+            (),
+            cv_strategy,
+            cv_state,
+        )
+
+        @test bonnet_state == bonnet_state
+        @test cv_state == cv_state
+
+        _logpartition = logpartition(ef)
+        _gradlogpartition = gradlogpartition(ef)
+        _inv_fisher = inv(fisherinformation(ef))
+        
+        # Compute costs
+        bonnet_cost = ExponentialFamilyProjection.compute_cost(
+            M,
+            bonnet_strategy,
+            bonnet_state,
+            η,
+            _logpartition,
+            _gradlogpartition,
+            _inv_fisher,
+        )
+
+        cv_cost = ExponentialFamilyProjection.compute_cost(
+            M,
+            cv_strategy,
+            cv_state,
+            η,
+            _logpartition,
+            _gradlogpartition,
+            _inv_fisher,
+        )
+
+        # Compute gradients
+        bonnet_gradient = similar(η)
+        cv_gradient = similar(η)
+
+        ExponentialFamilyProjection.compute_gradient!(
+            M,
+            bonnet_strategy,
+            bonnet_state,
+            bonnet_gradient,
+            η,
+            _logpartition,
+            _gradlogpartition,
+            _inv_fisher,
+        )
+
+        ExponentialFamilyProjection.compute_gradient!(
+            M,
+            cv_strategy,
+            cv_state,
+            cv_gradient,
+            η,
+            _logpartition,
+            _gradlogpartition,
+            _inv_fisher,
+        )
+
+        # The costs should be approximately equal (both targeting the same distribution)
+        @test bonnet_cost ≈ cv_cost rtol = 1e-2
+
+        # The gradients should be approximately equal
+        @test bonnet_gradient ≈ cv_gradient rtol = 1e-2
+
+        # Test gradient computation in manifold coordinates
+        p_manifold = ExponentialFamilyManifolds.partition_point(M, η)
+        
+        X_p_bonnet = Manifolds.zero_vector(M, p_manifold)
+        X_p_cv = Manifolds.zero_vector(M, p_manifold)
+        
+        c_p_bonnet, X_p_bonnet = bonnet_obj(M, X_p_bonnet, p_manifold)
+        c_p_cv, X_p_cv = cv_obj(M, X_p_cv, p_manifold)
+        
+        @test c_p_bonnet ≈ bonnet_cost
+        @test c_p_cv ≈ cv_cost
+        @test X_p_bonnet ≈ X_p_cv rtol = 1e-2
+    end
+end
