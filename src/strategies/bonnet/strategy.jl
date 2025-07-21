@@ -1,4 +1,4 @@
-using StableRNGs
+using StableRNGs, FillArrays
 
 import Random: AbstractRNG
 
@@ -29,9 +29,10 @@ preprocess_strategy_argument(::BonnetStrategy, argument::AbstractArray) = error(
     lazy"The `BonnetStrategy` requires the projection argument to be a callable object (e.g. `Function`) or an `InplaceLogpdfGradHess`. Got `$(typeof(argument))` instead.",
 )
 
-Base.@kwdef struct BonnetStrategyState{S, L, G, H, M}
+Base.@kwdef struct BonnetStrategyState{S, L, LB, G, H, M}
     samples::S
     logpdfs::L
+    logbasemeasures::LB
     grads::G
     hessians::H
     current_mean::M
@@ -40,6 +41,7 @@ end
 # Getter functions for BonnetStrategyState
 get_samples(state::BonnetStrategyState) = state.samples
 get_logpdfs(state::BonnetStrategyState) = state.logpdfs
+get_logbasemeasures(state::BonnetStrategyState) = state.logbasemeasures
 get_grads(state::BonnetStrategyState) = state.grads
 get_hessians(state::BonnetStrategyState) = state.hessians
 get_current_mean(state::BonnetStrategyState) = state.current_mean
@@ -59,6 +61,7 @@ function create_state!(
     # Prepare containers following the same pattern as ControlVariateStrategy
     samples = prepare_samples_container(rng, initial_ef, nsamples, supplementary_η)
     logpdfs = prepare_logpdfs_container(rng, initial_ef, nsamples, supplementary_η)
+    logbasemeasures = prepare_logbasemeasures_container(rng, initial_ef, nsamples, supplementary_η)
     grads = prepare_grads_container(rng, initial_ef, nsamples, supplementary_η)
     hessians = prepare_hessians_container(rng, initial_ef, nsamples, supplementary_η)
     current_mean = prepare_current_mean_container(rng, initial_ef, supplementary_η)
@@ -66,6 +69,7 @@ function create_state!(
     state = BonnetStrategyState(
         samples = samples,
         logpdfs = logpdfs,
+        logbasemeasures = logbasemeasures,
         grads = grads,
         hessians = hessians,
         current_mean = current_mean,
@@ -87,6 +91,37 @@ prepare_samples_container(rng, distribution, nsamples, supplementary_η) =
     rand(rng, distribution, nsamples)
 prepare_logpdfs_container(rng, distribution, nsamples, supplementary_η) =
     zeros(paramfloattype(distribution), nsamples)
+# `logbasemeasures` container is a bit different, if the basemeasure is known to be constant, the 
+# `log` of it can be precomputed and stored in the `lazy` container without actually allocating any space
+prepare_logbasemeasures_container(rng, distribution, nsamples, supplementary_η) =
+    prepare_logbasemeasures_container(
+        ExponentialFamily.isbasemeasureconstant(distribution),
+        rng,
+        distribution,
+        nsamples,
+        supplementary_η,
+    )
+
+# We use `Fill` from `FillArrays` to create a container with the same value repeated `nsamples` times
+# It does not allocate any memory, just stores the value and the number of times it should be repeated
+prepare_logbasemeasures_container(
+    ::ExponentialFamily.ConstantBaseMeasure,
+    rng,
+    distribution,
+    nsamples,
+    supplementary_η,
+) = Fill(
+    (1 - length(supplementary_η)) * ExponentialFamily.logbasemeasure(distribution, rand(rng, distribution)),
+    nsamples,
+)
+# If the basemeasure is not constant, we allocate the memory
+prepare_logbasemeasures_container(
+    ::ExponentialFamily.NonConstantBaseMeasure,
+    rng,
+    distribution,
+    nsamples,
+    supplementary_η,
+) = zeros(paramfloattype(distribution), nsamples)
 prepare_grads_container(rng, distribution, nsamples, supplementary_η) =
     zeros(
         paramfloattype(distribution),
@@ -123,8 +158,20 @@ function prepare_state!(
     _, sample_container = ExponentialFamily.check_logpdf(current_ef, get_samples(state))
     inplace_projection_argument! = convert(TL, projection_argument)
     
+    one_minus_n_of_supplementary = 1 - length(supplementary_η)
+    nonconstantbasemeasure =
+        ExponentialFamily.isbasemeasureconstant(current_ef) === ExponentialFamily.NonConstantBaseMeasure()
+    
     # Evaluate logpdf, grad, and hess for each sample
     for (i, sample) in enumerate(sample_container)
+        # if `basemeasure` is constant we assume that 
+        # the `log` of it has been precomputed before
+        if nonconstantbasemeasure
+            @inbounds get_logbasemeasures(state)[i] =
+                one_minus_n_of_supplementary *
+                ExponentialFamily.logbasemeasure(current_ef, sample)
+        end
+        
         logpdf!(inplace_projection_argument!, view(get_logpdfs(state), i:i), sample)
         grad!(inplace_projection_argument!, view(get_grads(state), :, i), sample)
         hess!(inplace_projection_argument!, view(get_hessians(state), :, :, i), sample)
@@ -145,7 +192,7 @@ function compute_cost(
     gradlogpartition,
     logpartition
 )
-    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition + mean(state.logbasemeasures)
+    return dot(gradlogpartition, η) - mean(get_logpdfs(state)) - logpartition + mean(get_logbasemeasures(state))
 end
 
 function compute_gradient!(

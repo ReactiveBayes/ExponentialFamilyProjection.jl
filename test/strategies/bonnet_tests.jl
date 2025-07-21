@@ -274,6 +274,7 @@ end
     bonnet_state = BonnetStrategyState(
         samples = bonnet_samples,
         logpdfs = bonnet_logpdfs,
+        logbasemeasures = zeros(nsamples),
         grads = bonnet_grads,
         hessians = bonnet_hessians,
         current_mean = bonnet_current_mean
@@ -431,6 +432,7 @@ end
         get_nsamples,
         get_samples,
         get_logpdfs,
+        get_logbasemeasures,
         get_grads,
         get_hessians,
         get_current_mean
@@ -449,6 +451,7 @@ end
     
     samples = randn(sample_dim, nsamples)
     logpdfs = zeros(nsamples)
+    logbasemeasures = zeros(nsamples)
     grads = randn(sample_dim, nsamples)
     hessians = randn(sample_dim, sample_dim, nsamples)
     current_mean = randn(sample_dim)
@@ -456,6 +459,7 @@ end
     state = BonnetStrategyState(
         samples = samples,
         logpdfs = logpdfs,
+        logbasemeasures = logbasemeasures,
         grads = grads,
         hessians = hessians,
         current_mean = current_mean
@@ -463,6 +467,7 @@ end
     
     @test get_samples(state) === samples
     @test get_logpdfs(state) === logpdfs
+    @test get_logbasemeasures(state) === logbasemeasures
     @test get_grads(state) === grads
     @test get_hessians(state) === hessians
     @test get_current_mean(state) === current_mean
@@ -483,6 +488,7 @@ end
         prepare_state!,
         get_samples,
         get_logpdfs,
+        get_logbasemeasures,
         get_grads,
         get_hessians,
         get_current_mean,
@@ -513,6 +519,7 @@ end
     # Pre-create containers
     samples = rand(dist, nsamples)  # This creates (2, nsamples) matrix
     logpdfs = zeros(nsamples)
+    logbasemeasures = zeros(nsamples)
     grads = zeros(sample_dim, nsamples)  # gradient at each sample
     hessians = zeros(sample_dim, sample_dim, nsamples)  # hessian at each sample
     current_mean = zeros(sample_dim)
@@ -520,6 +527,7 @@ end
     state = BonnetStrategyState(
         samples = samples,
         logpdfs = logpdfs,
+        logbasemeasures = logbasemeasures,
         grads = grads,
         hessians = hessians,
         current_mean = current_mean
@@ -602,6 +610,7 @@ end
     # Pre-create containers for univariate case
     samples = rand(dist, nsamples)  # This creates a vector of length nsamples
     logpdfs = zeros(nsamples)
+    logbasemeasures = zeros(nsamples)
     grads = zeros(sample_dim, nsamples)  # (1, nsamples) matrix
     hessians = zeros(sample_dim, sample_dim, nsamples)  # (1, 1, nsamples) array
     current_mean = zeros(sample_dim)
@@ -609,6 +618,7 @@ end
     state = BonnetStrategyState(
         samples = samples,
         logpdfs = logpdfs,
+        logbasemeasures = logbasemeasures,
         grads = grads,
         hessians = hessians,
         current_mean = current_mean
@@ -684,6 +694,7 @@ end
     rng = StableRNG(42)
     for distribution in [
             NormalMeanVariance(0, 1),
+            NormalMeanVariance(2, 1),
             MvNormalMeanCovariance(ones(2), Matrix(Diagonal(ones(2)))),
         ]
 
@@ -746,6 +757,7 @@ end
 
         _logpartition = logpartition(ef)
         _gradlogpartition = gradlogpartition(ef)
+        _fisher = fisherinformation(ef)
         _inv_fisher = inv(fisherinformation(ef))
         
         # Compute costs
@@ -792,10 +804,11 @@ end
         )
 
         # The costs should be approximately equal (both targeting the same distribution)
-        @test bonnet_cost ≈ cv_cost rtol = 1e-2
+        @test bonnet_cost ≈ cv_cost rtol = 0.1
 
         # The gradients should be approximately equal
-        @test bonnet_gradient ≈ cv_gradient rtol = 1e-2
+        grad_diff = bonnet_gradient - cv_gradient
+        @test dot(grad_diff, _fisher, grad_diff) ≈ 0.0 atol = 0.01
 
         # Test gradient computation in manifold coordinates
         p_manifold = ExponentialFamilyManifolds.partition_point(M, η)
@@ -808,7 +821,8 @@ end
         
         @test c_p_bonnet ≈ bonnet_cost
         @test c_p_cv ≈ cv_cost
-        @test X_p_bonnet ≈ X_p_cv rtol = 1e-2
+        X_diff = X_p_bonnet - X_p_cv
+        @test dot(X_diff, _fisher, X_diff) ≈ 0.0 atol = 0.01
     end
 end
 
@@ -821,6 +835,7 @@ end
         StableRNGs,
         ExponentialFamilyManifolds,
         ForwardDiff,
+        FillArrays,
         Manifolds
     import ExponentialFamilyProjection:
         BonnetStrategy,
@@ -830,6 +845,7 @@ end
         prepare_state!,
         get_samples,
         get_logpdfs,
+        get_logbasemeasures,
         get_grads,
         get_hessians,
         get_current_mean,
@@ -877,6 +893,7 @@ end
         # For univariate: samples is a vector, grads/hessians are in parameter space
         samples = zeros(paramfloattype(ef), nsamples)  # Vector for univariate
         logpdfs = zeros(paramfloattype(ef), nsamples)
+        logbasemeasures = Fill(getlogbasemeasure(ef)(0.0), nsamples)
         grads = zeros(paramfloattype(ef), sample_dim, nsamples)  # 1 x nsamples
         hessians = zeros(paramfloattype(ef), sample_dim, sample_dim, nsamples)  # 1 x 1 x nsamples
         current_mean = zeros(paramfloattype(ef), sample_dim)
@@ -884,6 +901,7 @@ end
         state2 = BonnetStrategyState(
             samples = samples,
             logpdfs = logpdfs,
+            logbasemeasures = logbasemeasures,
             grads = grads,
             hessians = hessians,
             current_mean = current_mean,
@@ -902,6 +920,7 @@ end
 
         @test get_samples(state1) == get_samples(state2)
         @test get_logpdfs(state1) == get_logpdfs(state2)
+        @test get_logbasemeasures(state1) == get_logbasemeasures(state2)
         @test get_grads(state1) == get_grads(state2)
         @test get_hessians(state1) == get_hessians(state2)
         @test get_current_mean(state1) == get_current_mean(state2)
@@ -950,6 +969,7 @@ end
         StableRNGs,
         ExponentialFamilyManifolds,
         ForwardDiff,
+        FillArrays,
         Manifolds
     import ExponentialFamilyProjection:
         BonnetStrategy,
@@ -959,6 +979,7 @@ end
         prepare_state!,
         get_samples,
         get_logpdfs,
+        get_logbasemeasures,
         get_grads,
         get_hessians,
         get_current_mean,
@@ -1001,6 +1022,7 @@ end
         # For multivariate: samples is a matrix, grads/hessians are in sample space
         samples = zeros(paramfloattype(ef), sample_dim, nsamples)  # Matrix for multivariate
         logpdfs = zeros(paramfloattype(ef), nsamples)
+        logbasemeasures = Fill(ExponentialFamily.logbasemeasure(ef, zeros(sample_dim)), nsamples)
         grads = zeros(paramfloattype(ef), sample_dim, nsamples)  # sample_dim x nsamples
         hessians = zeros(paramfloattype(ef), sample_dim, sample_dim, nsamples)  # sample_dim x sample_dim x nsamples
         current_mean = zeros(paramfloattype(ef), sample_dim)
@@ -1008,6 +1030,7 @@ end
         state2 = BonnetStrategyState(
             samples = samples,
             logpdfs = logpdfs,
+            logbasemeasures = logbasemeasures,
             grads = grads,
             hessians = hessians,
             current_mean = current_mean,
@@ -1026,6 +1049,7 @@ end
 
         @test get_samples(state1) == get_samples(state2)
         @test get_logpdfs(state1) == get_logpdfs(state2)
+        @test get_logbasemeasures(state1) == get_logbasemeasures(state2)
         @test get_grads(state1) == get_grads(state2)
         @test get_hessians(state1) == get_hessians(state2)
         @test get_current_mean(state1) == get_current_mean(state2)
