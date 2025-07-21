@@ -79,13 +79,11 @@ function prepare_state!(
 end
 
 function compute_cost(
-    M::AbstractManifold,
-    strategy::BonnetStrategy,
+    ::AbstractManifold,
+    ::BonnetStrategy,
     state::BonnetStrategyState,
     η,
-    logpartition,
     gradlogpartition,
-    inv_fisher,
 )
     return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition +
            mean(state.logbasemeasures)
@@ -108,8 +106,8 @@ function bonnet_compute_gradient!(
     X,
     η
 )
-    mean_grad_vector_η_1 = mean(state.grads, dims = 2)[:, 1]
-    mean_hess_vector_η_2 = mean(state.hessians, dims = 3)[:, :, 1]
+    mean_grad_vector_η_1 = mean(get_grads(state), dims = 2)[:, 1]
+    mean_hess_vector_η_2 = mean(get_hessians(state), dims = 3)[:, :, 1]
     grad_η1 = mean_grad_vector_η_1 - mean_hess_vector_η_2 * state.current_mean
     grad_η2 = 0.5 * mean_hess_vector_η_2
     typetag = ExponentialFamily.exponential_family_typetag(M)
@@ -117,3 +115,58 @@ function bonnet_compute_gradient!(
     X .= (η - grad_vec)
     return X
 end
+
+function call_objective(
+    objective::ProjectionCostGradientObjective{J,F,C,P,S},
+    M::AbstractManifold,
+    X,
+    p
+) where {J,F,C,P,S <: BonnetStrategy}
+    current_ef = convert(ExponentialFamilyDistribution, M, p)
+    current_η = copyto!(get_current_η(objective), getnaturalparameters(current_ef))
+
+    strategy = get_strategy(objective)
+    state = get_strategy_state(objective)
+    projection_parameters = get_projection_parameters(objective)
+    projection_argument = get_projection_argument(objective)
+    supplementary_η = get_supplementary_η(objective)
+
+    gradlogpartition = ExponentialFamily.gradlogpartition(current_ef)
+
+    state = prepare_state!(
+        strategy,
+        state,
+        M,
+        projection_parameters,
+        projection_argument,
+        current_ef,
+        supplementary_η,
+    )
+
+    # If we have some supplementary natural parameters in the objective 
+    # we must subtract them from the natural parameters of the current η
+    foreach(supplementary_η) do s_η
+        map!(-, current_η, current_η, s_η)
+    end
+
+    c = compute_cost(
+        M,
+        strategy,
+        state,
+        current_η,
+        gradlogpartition
+    )
+
+    X_nat = compute_gradient!(
+        M,
+        strategy,
+        state,
+        X,
+        current_η,
+    )
+    X = jacobian_nat_to_manifold!(M, X, X_nat)
+    X = project!(M, X, p, X)
+    return c, X
+end
+
+
