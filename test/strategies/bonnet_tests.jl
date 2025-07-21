@@ -754,9 +754,8 @@ end
             bonnet_strategy,
             bonnet_state,
             η,
-            _logpartition,
             _gradlogpartition,
-            _inv_fisher,
+            _logpartition
         )
 
         cv_cost = ExponentialFamilyProjection.compute_cost(
@@ -778,10 +777,7 @@ end
             bonnet_strategy,
             bonnet_state,
             bonnet_gradient,
-            η,
-            _logpartition,
-            _gradlogpartition,
-            _inv_fisher,
+            η
         )
 
         ExponentialFamilyProjection.compute_gradient!(

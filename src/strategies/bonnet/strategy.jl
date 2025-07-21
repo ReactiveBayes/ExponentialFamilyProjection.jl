@@ -138,14 +138,14 @@ function prepare_state!(
 end
 
 function compute_cost(
-    ::AbstractManifold,
+    M::AbstractManifold,
     ::BonnetStrategy,
     state::BonnetStrategyState,
     η,
     gradlogpartition,
+    logpartition
 )
-    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition +
-           mean(state.logbasemeasures)
+    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition + mean(state.logbasemeasures)
 end
 
 function compute_gradient!(
@@ -190,6 +190,7 @@ function call_objective(
     projection_argument = get_projection_argument(objective)
     supplementary_η = get_supplementary_η(objective)
 
+    logpartition = ExponentialFamily.logpartition(current_ef)
     gradlogpartition = ExponentialFamily.gradlogpartition(current_ef)
 
     state = prepare_state!(
@@ -213,7 +214,8 @@ function call_objective(
         strategy,
         state,
         current_η,
-        gradlogpartition
+        gradlogpartition,
+        logpartition
     )
 
     X_nat = compute_gradient!(
@@ -227,5 +229,3 @@ function call_objective(
     X = project!(M, X, p, X)
     return c, X
 end
-
-
