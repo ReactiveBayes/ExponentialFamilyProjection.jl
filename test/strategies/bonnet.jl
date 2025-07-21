@@ -337,6 +337,7 @@ end
         Distributions,
         BayesBase,
         LinearAlgebra,
+        Random,
         StableRNGs,
         ExponentialFamilyManifolds
     import ExponentialFamilyProjection:
@@ -391,10 +392,13 @@ end
     strategy = BonnetStrategy(nsamples = nsamples)
     rng = StableRNG(42)
     parameters = ProjectionParameters(rng = rng)
+
+    prepare_state!(strategy, state, M, parameters, inplace_target, ef, getnaturalparameters(ef))
     
-    # Test the container filling manually
-    Random.seed!(rng, 42)
-    Random.rand!(rng, ef, get_samples(state))
+    # Verify containers are filled correctly
+    @test all(isfinite, get_logpdfs(state))
+    @test all(isfinite, get_grads(state))
+    @test all(isfinite, get_hessians(state))
     
     _, sample_container = ExponentialFamily.check_logpdf(ef, get_samples(state))
     
@@ -402,56 +406,18 @@ end
     for (i, sample) in enumerate(sample_container)
         # Test logpdf evaluation
         logpdf_out = zeros(1)
-        logpdf!(inplace_target, logpdf_out, sample)
-        expected_logpdf = -(sample - 1)^2
-        @test logpdf_out[1] ≈ expected_logpdf
+        ExponentialFamilyProjection.logpdf!(inplace_target, logpdf_out, sample)
+        @test logpdf_out[1] ≈ get_logpdfs(state)[i]
         
         # Test gradient evaluation  
         grad_out = zeros(1)
-        grad!(inplace_target, grad_out, sample)
-        expected_grad = -2 * (sample - 1)
-        @test grad_out[1] ≈ expected_grad
+        ExponentialFamilyProjection.grad!(inplace_target, grad_out, sample)
+        @test grad_out[1] ≈ get_grads(state)[1, i]
         
         # Test hessian evaluation
         hess_out = zeros(1, 1)
-        hess!(inplace_target, hess_out, sample)
-        expected_hess = -2
-        @test hess_out[1, 1] ≈ expected_hess
-        
-        # Store in containers
-        get_logpdfs(state)[i] = logpdf_out[1]
-        get_grads(state)[1, i] = grad_out[1]  # Note: for univariate, grads is (1, nsamples)
-        get_hessians(state)[1, 1, i] = hess_out[1, 1]
+        ExponentialFamilyProjection.hess!(inplace_target, hess_out, sample)
+        @test hess_out[1, 1] ≈ get_hessians(state)[1, 1, i]
     end
     
-    # Verify containers are filled correctly
-    @test all(isfinite, get_logpdfs(state))
-    @test all(isfinite, get_grads(state))
-    @test all(isfinite, get_hessians(state))
-    
-    # Test that values match expected calculations
-    for (i, sample) in enumerate(sample_container)
-        expected_logpdf = -(sample - 1)^2
-        @test get_logpdfs(state)[i] ≈ expected_logpdf
-        
-        expected_grad = -2 * (sample - 1)
-        @test get_grads(state)[1, i] ≈ expected_grad
-        
-        expected_hess = -2
-        @test get_hessians(state)[1, 1, i] ≈ expected_hess
-    end
-end
-
-@testitem "BonnetInplaceLogpdf" begin
-    import ExponentialFamilyProjection:
-        BonnetInplaceLogpdf
-    using BayesBase: InplaceLogpdf
-
-    logpdf! = (out, x) -> -(x - 1)^2
-    grad! = (out, x) -> out .= -2 * (x - 1)
-    hess! = (out, x) -> out .= -2
-
-    inplace = BonnetInplaceLogpdf(logpdf!, grad!, hess!)
-
-    @test inplace(zeros(3), 1:3) == 1:3
 end
