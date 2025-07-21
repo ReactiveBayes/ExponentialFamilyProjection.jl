@@ -186,6 +186,244 @@ end
     @test hess_out[1, 1] ≈ -2.0
 end
 
+@testitem "BonnetStrategy vs ControlVariateStrategy comparison" begin
+    using ExponentialFamily,
+        Distributions,
+        BayesBase,
+        LinearAlgebra,
+        Random,
+        StableRNGs,
+        ExponentialFamilyManifolds
+    import ExponentialFamilyProjection:
+        BonnetStrategy,
+        BonnetStrategyState,
+        ControlVariateStrategy,
+        ControlVariateStrategyState,
+        InplaceLogpdfGradHess,
+        prepare_state!,
+        get_samples,
+        get_logpdfs,
+        get_grads,
+        get_hessians,
+        get_current_mean,
+        get_logbasemeasures,
+        get_sufficientstatistics,
+        get_gradsamples,
+        ProjectionParameters,
+        compute_gradient!
+
+    # Test with multivariate normal distribution
+    μ = [1.0, 2.0]
+    Σ = [2.0 0.5; 0.5 1.0]
+    dist = MvNormalMeanCovariance(μ, Σ)
+    
+    # Create specific target function: -(x₁-1)² - (x₂-2)²
+    target_logpdf = (x) -> -(x[1] - 1)^2 - (x[2] - 2)^2
+    
+    # Create InplaceLogpdfGradHess for BonnetStrategy
+    logpdf_fn! = (out, x) -> (out[1] = -(x[1] - 1)^2 - (x[2] - 2)^2)
+    grad_fn! = (out, x) -> begin
+        out[1] = -2 * (x[1] - 1)
+        out[2] = -2 * (x[2] - 2)
+    end
+    hess_fn! = (out, x) -> begin
+        out[1, 1] = -2
+        out[1, 2] = 0
+        out[2, 1] = 0
+        out[2, 2] = -2
+    end
+    bonnet_target = InplaceLogpdfGradHess(logpdf_fn!, grad_fn!, hess_fn!)
+        
+    # Test parameters
+    nsamples = 80000
+    seed = 42
+    sample_dim = 2
+    
+    # Create exponential family distribution and manifold
+    ef = convert(ExponentialFamilyDistribution, dist)
+    T = ExponentialFamily.exponential_family_typetag(ef)
+    d = size(mean(ef))
+    c = getconditioner(ef)
+    M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
+    
+    # Use the same initial point for both strategies
+    rng = StableRNG(seed)
+    initial_point = rand(rng, M)
+    initial_ef = convert(ExponentialFamilyDistribution, M, initial_point)
+    
+    # Create strategies with same nsamples
+    bonnet_strategy = BonnetStrategy(nsamples = nsamples)
+    control_variate_strategy = ControlVariateStrategy(nsamples = nsamples, buffer = nothing)
+    
+    # Test with the same seed for reproducibility
+    bonnet_parameters = ProjectionParameters(rng = StableRNG(seed), seed = seed)
+    cv_parameters = ProjectionParameters(rng = StableRNG(seed), seed = seed)
+    
+    # Preprocess the strategy arguments to handle conversion properly
+    import ExponentialFamilyProjection: preprocess_strategy_argument
+    bonnet_strategy_processed, bonnet_target_processed = preprocess_strategy_argument(bonnet_strategy, bonnet_target)
+    cv_strategy_processed, cv_target_processed = preprocess_strategy_argument(control_variate_strategy, target_logpdf)
+    
+    # Create containers for BonnetStrategy
+    bonnet_samples = rand(initial_ef, nsamples)
+    bonnet_logpdfs = zeros(nsamples)
+    bonnet_grads = zeros(sample_dim, nsamples)
+    bonnet_hessians = zeros(sample_dim, sample_dim, nsamples)
+    bonnet_current_mean = zeros(sample_dim)
+    
+    bonnet_state = BonnetStrategyState(
+        samples = bonnet_samples,
+        logpdfs = bonnet_logpdfs,
+        grads = bonnet_grads,
+        hessians = bonnet_hessians,
+        current_mean = bonnet_current_mean
+    )
+    
+    # Create containers for ControlVariateStrategy  
+    cv_samples = rand(initial_ef, nsamples)
+    cv_logpdfs = zeros(nsamples)
+    cv_logbasemeasures = zeros(nsamples)  # We'll handle base measures
+    cv_sufficientstatistics = zeros(length(getnaturalparameters(initial_ef)), nsamples)
+    cv_gradsamples = zeros(length(getnaturalparameters(initial_ef)), nsamples)
+    
+    cv_state = ControlVariateStrategyState(
+        samples = cv_samples,
+        logpdfs = cv_logpdfs,
+        logbasemeasures = cv_logbasemeasures,
+        sufficientstatistics = cv_sufficientstatistics,
+        gradsamples = cv_gradsamples
+    )
+    
+    # Prepare states
+    supplementary_η = ()
+    bonnet_state_prepared = prepare_state!(
+        bonnet_strategy_processed,
+        bonnet_state,
+        M,
+        bonnet_parameters,
+        bonnet_target_processed,
+        initial_ef,
+        supplementary_η
+    )
+    
+    cv_state_prepared = prepare_state!(
+        cv_strategy_processed,
+        cv_state,
+        M,
+        cv_parameters,
+        cv_target_processed,
+        initial_ef,
+        supplementary_η
+    )
+    
+    # Verify both strategies are using the same samples (they should be with same seed)
+    @test get_samples(bonnet_state_prepared) ≈ get_samples(cv_state_prepared)
+    
+    # Get some parameters from the initial distribution
+    η = getnaturalparameters(initial_ef)
+    logpartition = ExponentialFamily.logpartition(initial_ef)
+    gradlogpartition = ExponentialFamily.gradlogpartition(initial_ef)
+    fisherinformation = ExponentialFamily.fisherinformation(initial_ef)
+    inv_fisher = inv(fisherinformation)
+    
+    # Create gradient containers
+    bonnet_gradient = zeros(length(η))
+    cv_gradient = zeros(length(η))
+    
+    # Compute gradients using both strategies
+    compute_gradient!(
+        M,
+        bonnet_strategy_processed,
+        bonnet_state_prepared,
+        bonnet_gradient,
+        η
+    )
+    
+    compute_gradient!(
+        M,
+        cv_strategy_processed,
+        cv_state_prepared,
+        cv_gradient,
+        η,
+        logpartition,
+        gradlogpartition,
+        inv_fisher
+    )
+    
+    # Compare the gradients - they should be approximately equal
+    grad_diff = bonnet_gradient - cv_gradient
+    @test dot(grad_diff, fisherinformation, grad_diff) ≈ 0 atol=1e-3
+    
+    # Additional verification: test that both strategies produce finite results
+    @test all(isfinite, bonnet_gradient)
+    @test all(isfinite, cv_gradient)
+    
+    # Test with different initial points to ensure consistency
+    for test_seed in [123, 456, 789]
+        test_rng = StableRNG(test_seed)
+        test_point = rand(test_rng, M)
+        test_ef = convert(ExponentialFamilyDistribution, M, test_point)
+        
+        bonnet_params_test = ProjectionParameters(rng = StableRNG(test_seed), seed = test_seed)
+        cv_params_test = ProjectionParameters(rng = StableRNG(test_seed), seed = test_seed)
+        
+        # Prepare states with new test point
+        prepare_state!(
+            bonnet_strategy_processed,
+            bonnet_state,
+            M,
+            bonnet_params_test,
+            bonnet_target_processed,
+            test_ef,
+            supplementary_η
+        )
+        
+        prepare_state!(
+            cv_strategy_processed,
+            cv_state,
+            M,
+            cv_params_test,
+            cv_target_processed,
+            test_ef,
+            supplementary_η
+        )
+        
+        # Get parameters for test point
+        test_η = getnaturalparameters(test_ef)
+        test_logpartition = ExponentialFamily.logpartition(test_ef)
+        test_gradlogpartition = ExponentialFamily.gradlogpartition(test_ef)
+        test_inv_fisher = inv(ExponentialFamily.fisherinformation(test_ef))
+        
+        # Reset gradient containers
+        fill!(bonnet_gradient, 0.0)
+        fill!(cv_gradient, 0.0)
+        
+        # Compute gradients
+        compute_gradient!(
+            M,
+            bonnet_strategy_processed,
+            bonnet_state,
+            bonnet_gradient,
+            test_η,
+        )
+        
+        compute_gradient!(
+            M,
+            cv_strategy_processed,
+            cv_state,
+            cv_gradient,
+            test_η,
+            test_logpartition,
+            test_gradlogpartition,
+            test_inv_fisher
+        )
+        
+        # Compare gradients for this test point
+        grad_diff = bonnet_gradient - cv_gradient
+        @test dot(grad_diff, fisherinformation, grad_diff) ≈ 0 atol=1e-3
+    end
+end
+
 @testitem "BonnetStrategy getter functions" begin
     import ExponentialFamilyProjection:
         BonnetStrategy,

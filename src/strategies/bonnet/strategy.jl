@@ -23,6 +23,12 @@ end
 
 get_nsamples(strategy::BonnetStrategy) = strategy.nsamples
 
+preprocess_strategy_argument(strategy::BonnetStrategy{S,TL}, argument::Any) where {S,TL} =
+    (strategy, convert(TL, argument))
+preprocess_strategy_argument(::BonnetStrategy, argument::AbstractArray) = error(
+    lazy"The `BonnetStrategy` requires the projection argument to be a callable object (e.g. `Function`) or an `InplaceLogpdfGradHess`. Got `$(typeof(argument))` instead.",
+)
+
 Base.@kwdef struct BonnetStrategyState{S, L, G, H, M}
     samples::S
     logpdfs::L
@@ -85,15 +91,22 @@ function compute_cost(
            mean(state.logbasemeasures)
 end
 
+function compute_gradient!(
+    M::AbstractManifold,
+    strategy::BonnetStrategy,
+    state::BonnetStrategyState,
+    X,
+    η,
+)
+    return bonnet_compute_gradient!(M, strategy, state, X, η)
+end
+
 function bonnet_compute_gradient!(
     M::AbstractManifold,
     ::BonnetStrategy,
     state::BonnetStrategyState,
     X,
-    η,
-    _,
-    _,
-    _,
+    η
 )
     mean_grad_vector_η_1 = mean(state.grads, dims = 2)[:, 1]
     mean_hess_vector_η_2 = mean(state.hessians, dims = 3)[:, :, 1]
