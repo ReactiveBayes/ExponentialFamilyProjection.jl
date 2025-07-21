@@ -180,7 +180,7 @@ function Manopt.get_stopping_criterion(
     return StopAfterIteration(niterations)
 end
 
-using Manopt, StaticTools
+using Manopt
 
 function check_inputs(prj::ProjectedTo, projection_argument::F, supplementary...; initialpoint = nothing, kwargs...) where {F}
     if isnothing(initialpoint)

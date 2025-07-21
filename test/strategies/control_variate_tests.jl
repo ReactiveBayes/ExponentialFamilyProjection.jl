@@ -416,7 +416,7 @@ end
 end
 
 @testitem "Projection result should not depend on the usage of buffer" begin
-    using ExponentialFamily, BayesBase, Bumper, StaticTools
+    using ExponentialFamily, BayesBase, Bumper
     distributions = [
         Beta(10, 10),
         Gamma(10, 10),
@@ -431,7 +431,7 @@ end
     for distribution in distributions
         parameters_with_buffer = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
-                buffer = StaticTools.MallocSlabBuffer(),
+                buffer = Bumper.SlabBuffer(),
             ),
         )
         parameters_without_buffer = ProjectionParameters(

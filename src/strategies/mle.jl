@@ -1,4 +1,3 @@
-using LoopVectorization
 
 """
     MLEStrategy()
@@ -48,7 +47,7 @@ function create_state!(
         sample_sufficientstatistics = __projection_fast_pack_parameters(
             ExponentialFamily.sufficientstatistics(initial_ef, sample),
         )
-        @turbo warn_check_args = false for j = 1:J
+        for j = 1:J
             @inbounds sufficientstatistics[j, i] = sample_sufficientstatistics[j]
         end
     end

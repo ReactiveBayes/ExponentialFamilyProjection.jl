@@ -1,7 +1,5 @@
 import Manopt
 
-using LoopVectorization
-
 """
     BoundedNormUpdateRule(limit; direction = Manopt.IdentityUpdateRule()) 
 
@@ -50,7 +48,7 @@ function (b::BoundedNormUpdateRule)(
     step, d = b.direction(mp, s, i)
     C = Manopt.norm(M, p, d)
     if C > b.limit
-        @turbo warn_check_args = false for i in eachindex(d)
+        for i in eachindex(d)
             d[i] = d[i] * b.limit / C
         end
     end
