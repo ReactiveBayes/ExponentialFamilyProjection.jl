@@ -123,7 +123,7 @@ function compute_gradient! end
 include("strategies/control_variate.jl")
 include("strategies/mle.jl")
 include("strategies/default.jl")
-
-
+# Bonnet strategy
+include("strategies/bonnet/bonnet_logpdf.jl")
 
 end
