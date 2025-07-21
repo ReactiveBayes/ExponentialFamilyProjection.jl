@@ -71,3 +71,36 @@ function prepare_state!(
     state.current_mean .= (-2η2) \ η1
     return state
 end
+
+function compute_cost(
+    M::AbstractManifold,
+    strategy::BonnetStrategy,
+    state::BonnetStrategyState,
+    η,
+    logpartition,
+    gradlogpartition,
+    inv_fisher,
+)
+    return dot(gradlogpartition, η) - mean(state.logpdfs) - logpartition +
+           mean(state.logbasemeasures)
+end
+
+function bonnet_compute_gradient!(
+    M::AbstractManifold,
+    ::BonnetStrategy,
+    state::BonnetStrategyState,
+    X,
+    η,
+    _,
+    _,
+    _,
+)
+    mean_grad_vector_η_1 = mean(state.grads, dims = 2)[:, 1]
+    mean_hess_vector_η_2 = mean(state.hessians, dims = 3)[:, :, 1]
+    grad_η1 = mean_grad_vector_η_1 - mean_hess_vector_η_2 * state.current_mean
+    grad_η2 = 0.5 * mean_hess_vector_η_2
+    typetag = ExponentialFamily.exponential_family_typetag(M)
+    grad_vec = ExponentialFamily.pack_parameters(typetag, (grad_η1, grad_η2))
+    X .= (η - grad_vec)
+    return X
+end
