@@ -58,7 +58,7 @@ function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
     # If we have some supplementary natural parameters in the objective 
     # we must subtract them from the natural parameters of the current η
     foreach(supplementary_η) do s_η
-        vmap!(-, current_η, current_η, s_η)
+        map!(-, current_η, current_η, s_η)
     end
 
     c = compute_cost(
