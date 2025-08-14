@@ -168,6 +168,10 @@ end
         @testset let distribution = MvNormalMeanCovariance([0.5, -1.5], [1.5 0.3; 0.3 0.8])
             @test test_gaussnewton_projection_convergence(distribution)
         end
+
+        @testset let distribution = MvNormalMeanCovariance(10randn(StableRNG(42), 4), 10rand(StableRNG(43), 4))
+            @test test_gaussnewton_projection_convergence(distribution, niterations_range = 500:100:2000)
+        end
     end
 end
 
