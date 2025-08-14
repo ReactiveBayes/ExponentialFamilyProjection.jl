@@ -68,6 +68,16 @@ function create_state!(
     )
 end
 
+function _compute_grad_hess_state!(::Any, state, inplace_projection_argument!)
+    grad!(inplace_projection_argument!, state.grad, state.current_mean)
+    hess!(inplace_projection_argument!, state.hessian, state.current_mean)
+end
+
+function _compute_grad_hess_state!(::Type{ExponentialFamily.NormalMeanVariance}, state, inplace_projection_argument!)
+    grad!(inplace_projection_argument!, state.grad, state.current_mean[1])
+    hess!(inplace_projection_argument!, state.hessian, state.current_mean[1])
+end
+
 function prepare_state!(
     ::GaussNewton{S,TL},
     state::GaussNewtonState,
@@ -104,9 +114,8 @@ function prepare_state!(
     state.current_mean .= (-2η2) \ η1
 
     # Evaluate grad/hessian once at the current mean for deterministic gradient
-    grad!(inplace_projection_argument!, state.grad, state.current_mean)
-    hess!(inplace_projection_argument!, state.hessian, state.current_mean)
-
+    ef_typetag = ExponentialFamily.exponential_family_typetag(current_ef)
+    _compute_grad_hess_state!(ef_typetag, state, inplace_projection_argument!)
     return state
 end
 
