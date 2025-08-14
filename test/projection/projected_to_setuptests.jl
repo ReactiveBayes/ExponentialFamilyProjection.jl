@@ -1,5 +1,5 @@
 using ExponentialFamily, Distributions, BayesBase, StableRNGs, RollingFunctions, Manopt, ForwardDiff
-import ExponentialFamilyProjection: InplaceLogpdfGradHess, BonnetStrategy
+import ExponentialFamilyProjection: InplaceLogpdfGradHess, BonnetStrategy, GaussNewton
 
 function test_projection_mle(
     distribution;
@@ -488,6 +488,63 @@ function test_bonnet_niterations_convergence(
 
     if !test_convergence
         @warn "`niterations` convergence test for BonnetStrategy with $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+        return false
+    end
+
+    return test_required_accuracy && test_convergence
+end
+
+
+# Convergence test for GaussNewton (deterministic, no sampling). We vary niterations only.
+function test_gaussnewton_projection_convergence(
+    distribution;
+    to = missing,
+    dims = missing,
+    conditioner = missing,
+    niterations_range = _convergence_niterations_default_range(distribution),
+    niterations_tolerance = _convergence_niterations_default_tolerance(distribution),
+    niterations_required_accuracy = 1e-1,
+    niterations_stepsize = ConstantLength(0.1),
+    niterations_rng = StableRNG(42),
+    kwargs...,
+)
+    T = ismissing(to) ?
+        ExponentialFamily.exponential_family_typetag(
+            convert(ExponentialFamilyDistribution, distribution),
+        ) : to
+    dims = ismissing(dims) ? size(rand(StableRNG(42), distribution)) : dims
+    conditioner = ismissing(conditioner) ?
+        getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
+
+    target = create_bonnet_target(distribution)
+
+    experiment = map(niterations_range) do niterations
+        parameters = ProjectionParameters(
+            strategy = GaussNewton(),
+            niterations = niterations,
+            tolerance = niterations_tolerance,
+            stepsize = niterations_stepsize,
+            seed = rand(niterations_rng, UInt),
+        )
+        projection = ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
+        approximated = project_to(projection, target)
+        divergence = test_convergence_metric(approximated, distribution)
+        return divergence, approximated
+    end
+
+    divergence = map(e -> e[1], experiment)
+    approximated = map(e -> e[2], experiment)
+
+    test_required_accuracy = any(<(niterations_required_accuracy), divergence)
+
+    if !test_required_accuracy
+        @warn "`niterations` accuracy test for GaussNewton with `$(distribution)` failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
+    end
+
+    test_convergence = test_convergence_to_stable_point(divergence)
+
+    if !test_convergence
+        @warn "`niterations` convergence test for GaussNewton with $(distribution) failed. The approximated distributions were `$(approximated)`. The divergences was `$(divergence)`."
         return false
     end
 

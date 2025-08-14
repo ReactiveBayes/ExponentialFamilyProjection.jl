@@ -185,7 +185,7 @@ function prepare_state!(
 end
 
 function compute_cost(
-    M::AbstractManifold,
+    ::AbstractManifold,
     ::BonnetStrategy,
     state::BonnetStrategyState,
     η,
