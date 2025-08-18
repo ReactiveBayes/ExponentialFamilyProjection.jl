@@ -86,42 +86,6 @@ function create_state!(
     )
 end
 
-# Helper functions to prepare containers for BonnetStrategy
-prepare_samples_container(rng, distribution, nsamples, supplementary_η) =
-    rand(rng, distribution, nsamples)
-prepare_logpdfs_container(rng, distribution, nsamples, supplementary_η) =
-    zeros(paramfloattype(distribution), nsamples)
-# `logbasemeasures` container is a bit different, if the basemeasure is known to be constant, the 
-# `log` of it can be precomputed and stored in the `lazy` container without actually allocating any space
-prepare_logbasemeasures_container(rng, distribution, nsamples, supplementary_η) =
-    prepare_logbasemeasures_container(
-        ExponentialFamily.isbasemeasureconstant(distribution),
-        rng,
-        distribution,
-        nsamples,
-        supplementary_η,
-    )
-
-# We use `Fill` from `FillArrays` to create a container with the same value repeated `nsamples` times
-# It does not allocate any memory, just stores the value and the number of times it should be repeated
-prepare_logbasemeasures_container(
-    ::ExponentialFamily.ConstantBaseMeasure,
-    rng,
-    distribution,
-    nsamples,
-    supplementary_η,
-) = Fill(
-    (1 - length(supplementary_η)) * ExponentialFamily.logbasemeasure(distribution, rand(rng, distribution)),
-    nsamples,
-)
-# If the basemeasure is not constant, we allocate the memory
-prepare_logbasemeasures_container(
-    ::ExponentialFamily.NonConstantBaseMeasure,
-    rng,
-    distribution,
-    nsamples,
-    supplementary_η,
-) = zeros(paramfloattype(distribution), nsamples)
 prepare_grads_container(rng, distribution, nsamples, supplementary_η) =
     zeros(
         paramfloattype(distribution),
