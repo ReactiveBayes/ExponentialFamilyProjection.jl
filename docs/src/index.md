@@ -42,11 +42,26 @@ The optimization procedure requires computing the expectation of the gradient to
 ExponentialFamilyProjection.DefaultStrategy
 ExponentialFamilyProjection.ControlVariateStrategy
 ExponentialFamilyProjection.MLEStrategy
+ExponentialFamilyProjection.BonnetStrategy
+ExponentialFamilyProjection.GaussNewton
 ExponentialFamilyProjection.preprocess_strategy_argument
 ExponentialFamilyProjection.create_state!
 ExponentialFamilyProjection.prepare_state!
 ExponentialFamilyProjection.compute_cost
 ExponentialFamilyProjection.compute_gradient!
+```
+
+## In-place logpdf/grad/Hessian adapters
+
+The library provides convenient wrappers to evaluate log-density, gradient, and Hessian in-place, and an adapter to combine separate `grad!`/`hess!` into a single `grad_hess!`.
+
+```@docs
+ExponentialFamilyProjection.InplaceLogpdfGradHess
+ExponentialFamilyProjection.InplaceLogpdfGradHess(::Any, ::Any, ::Any)
+ExponentialFamilyProjection.NaiveGradHess
+ExponentialFamilyProjection.logpdf!(::ExponentialFamilyProjection.InplaceLogpdfGradHess, ::Any, ::Any)
+ExponentialFamilyProjection.grad_hess!(::ExponentialFamilyProjection.InplaceLogpdfGradHess, ::Any, ::Any, ::Any)
+ExponentialFamilyProjection.grad_hess!(::ExponentialFamilyProjection.NaiveGradHess, ::Any, ::Any, ::Any)
 ```
 
 For high-dimensional distributions, adjusting the default number of samples might be necessary to achieve better performance.
