@@ -1,5 +1,5 @@
 """
-    NaiveGradHess(grad!, hess!)
+    NaiveGradHess{G, H}
 
 Adapter that exposes only `grad_hess!` by calling provided `grad!` and `hess!` sequentially.
 Useful as a fallback when a combined implementation is not available.
