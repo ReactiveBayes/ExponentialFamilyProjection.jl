@@ -69,13 +69,11 @@ function create_state!(
 end
 
 function _compute_grad_hess_state!(::Any, state, inplace_projection_argument!)
-    grad!(inplace_projection_argument!, state.grad, state.current_mean)
-    hess!(inplace_projection_argument!, state.hessian, state.current_mean)
+    grad_hess!(inplace_projection_argument!, state.grad, state.hessian, state.current_mean)
 end
 
 function _compute_grad_hess_state!(::Type{ExponentialFamily.NormalMeanVariance}, state, inplace_projection_argument!)
-    grad!(inplace_projection_argument!, state.grad, state.current_mean[1])
-    hess!(inplace_projection_argument!, state.hessian, state.current_mean[1])
+    grad_hess!(inplace_projection_argument!, state.grad, state.hessian, state.current_mean[1])
 end
 
 function prepare_state!(

@@ -12,8 +12,9 @@
     
     @test inplace_struct isa InplaceLogpdfGradHess
     @test inplace_struct.logpdf! === logpdf_fn!
-    @test inplace_struct.grad! === grad_fn!
-    @test inplace_struct.hess! === hess_fn!
+    @test inplace_struct.grad_hess! isa ExponentialFamilyProjection.NaiveGradHess
+    @test inplace_struct.grad_hess!.grad! === grad_fn!
+    @test inplace_struct.grad_hess!.hess! === hess_fn!
 end
 
 @testitem "InplaceLogpdfGradHess univariate case" begin
@@ -32,24 +33,20 @@ end
     
     # Test points
     test_points = [0.0, 1.0, 2.0, 3.0]
-    
+
     for x in test_points
         # Test logpdf
         logpdf_out = zeros(1)
         ExponentialFamilyProjection.logpdf!(inplace_struct, logpdf_out, x)
         expected_logpdf = -(x - 1)^2
         @test logpdf_out[1] ≈ expected_logpdf
+
+        grad_out, hess_out = zeros(1), zeros(1)
+        grad_out, hess_out = inplace_struct.grad_hess!(grad_out, hess_out, x)
         
-        # Test gradient
-        grad_out = zeros(1)
-        ExponentialFamilyProjection.grad!(inplace_struct, grad_out, x)
         expected_grad = -2 * (x - 1)
-        @test grad_out[1] ≈ expected_grad
-        
-        # Test hessian
-        hess_out = zeros(1)
-        ExponentialFamilyProjection.hess!(inplace_struct, hess_out, x)
         expected_hess = -2
+        @test grad_out[1] ≈ expected_grad
         @test hess_out[1] ≈ expected_hess
     end
 end
@@ -92,16 +89,11 @@ end
         expected_logpdf = -(x[1] - 1)^2 - (x[2] - 2)^2
         @test logpdf_out[1] ≈ expected_logpdf
         
-        # Test gradient
-        grad_out = zeros(2)
-        ExponentialFamilyProjection.grad!(inplace_struct, grad_out, x)
+        # Test gradient and hessian together
+        grad_out, hess_out = inplace_struct.grad_hess!(zeros(2), zeros(2, 2), x)
         expected_grad = [-2 * (x[1] - 1), -2 * (x[2] - 2)]
-        @test grad_out ≈ expected_grad
-        
-        # Test hessian
-        hess_out = zeros(2, 2)
-        ExponentialFamilyProjection.hess!(inplace_struct, hess_out, x)
         expected_hess = [-2 0; 0 -2]
+        @test grad_out ≈ expected_grad
         @test hess_out ≈ expected_hess
     end
 end
@@ -146,16 +138,11 @@ end
         expected_logpdf = -sum((x[i] - targets[i])^2 for i in 1:dim)
         @test logpdf_out[1] ≈ expected_logpdf
         
-        # Test gradient
-        grad_out = zeros(dim)
-        ExponentialFamilyProjection.grad!(inplace_struct, grad_out, x)
+        # Test gradient and hessian together
+        grad_out, hess_out = inplace_struct.grad_hess!(zeros(dim), zeros(dim, dim), x)
         expected_grad = [-2 * (x[i] - targets[i]) for i in 1:dim]
-        @test grad_out ≈ expected_grad
-        
-        # Test hessian
-        hess_out = zeros(dim, dim)
-        ExponentialFamilyProjection.hess!(inplace_struct, hess_out, x)
         expected_hess = -2 * I(dim)
+        @test grad_out ≈ expected_grad
         @test hess_out ≈ expected_hess
     end
 end
@@ -178,11 +165,9 @@ end
     @test logpdf_out[1] ≈ -1.0  # -(2-1)² = -1
     
     grad_out = ones(1)
-    ExponentialFamilyProjection.grad!(inplace_struct, grad_out, x)
-    @test grad_out[1] ≈ -2.0  # -2(2-1) = -2
-    
     hess_out = ones(1, 1)
-    ExponentialFamilyProjection.hess!(inplace_struct, hess_out, x)
+    grad_out, hess_out = inplace_struct.grad_hess!(grad_out, hess_out, x)
+    @test grad_out[1] ≈ -2.0  # -2(2-1) = -2
     @test hess_out[1, 1] ≈ -2.0
 end
 
@@ -561,14 +546,9 @@ end
         ExponentialFamilyProjection.logpdf!(inplace_target, logpdf_out, sample)
         @test logpdf_out[1] ≈ get_logpdfs(state)[i]
         
-        # Test gradient evaluation  
-        grad_out = zeros(2)
-        ExponentialFamilyProjection.grad!(inplace_target, grad_out, sample)
+        # Test gradient and hessian evaluation together
+        grad_out, hess_out = inplace_target.grad_hess!(zeros(2), zeros(2, 2), sample)
         @test grad_out ≈ get_grads(state)[:, i]
-        
-        # Test hessian evaluation
-        hess_out = zeros(2, 2)
-        ExponentialFamilyProjection.hess!(inplace_target, hess_out, sample)
         @test hess_out ≈ get_hessians(state)[:, :, i]
     end
 
@@ -651,14 +631,9 @@ end
         ExponentialFamilyProjection.logpdf!(inplace_target, logpdf_out, sample)
         @test logpdf_out[1] ≈ get_logpdfs(state)[i]
         
-        # Test gradient evaluation  
-        grad_out = zeros(1)
-        ExponentialFamilyProjection.grad!(inplace_target, grad_out, sample)
+        # Test gradient and hessian evaluation together
+        grad_out, hess_out = inplace_target.grad_hess!(zeros(1), zeros(1, 1), sample)
         @test grad_out[1] ≈ get_grads(state)[1, i]
-        
-        # Test hessian evaluation
-        hess_out = zeros(1, 1)
-        ExponentialFamilyProjection.hess!(inplace_target, hess_out, sample)
         @test hess_out[1, 1] ≈ get_hessians(state)[1, 1, i]
     end
     

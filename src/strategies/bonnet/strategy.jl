@@ -137,8 +137,12 @@ function prepare_state!(
         end
         
         logpdf!(inplace_projection_argument!, view(get_logpdfs(state), i:i), sample)
-        grad!(inplace_projection_argument!, view(get_grads(state), :, i), sample)
-        hess!(inplace_projection_argument!, view(get_hessians(state), :, :, i), sample)
+        grad_hess!(
+            inplace_projection_argument!,
+            view(get_grads(state), :, i),
+            view(get_hessians(state), :, :, i),
+            sample,
+        )
     end
     
     current_nat_param = getnaturalparameters(current_ef)

@@ -62,10 +62,8 @@
     # current mean for NormalMeanVariance is just the mean(dist)
     current_mean = mean(dist)
     grad_out = zeros(1)
-    ExponentialFamilyProjection.grad!(inplace_target, grad_out, current_mean)
     hess_out = zeros(1, 1)
-    ExponentialFamilyProjection.hess!(inplace_target, hess_out, current_mean)
-
+    ExponentialFamilyProjection.grad_hess!(inplace_target, grad_out, hess_out, current_mean)
     @test state.grad[1] ≈ grad_out[1]
     @test state.hessian[1, 1] ≈ hess_out[1, 1]
 end
@@ -138,10 +136,8 @@ end
     # Verify gradient and Hessian at the current mean
     current_mean = mean(dist)
     grad_out = zeros(2)
-    ExponentialFamilyProjection.grad!(inplace_target, grad_out, current_mean)
     hess_out = zeros(2, 2)
-    ExponentialFamilyProjection.hess!(inplace_target, hess_out, current_mean)
-
+    ExponentialFamilyProjection.grad_hess!(inplace_target, grad_out, hess_out, current_mean)
     @test state.grad ≈ grad_out
     @test state.hessian ≈ hess_out
 end
