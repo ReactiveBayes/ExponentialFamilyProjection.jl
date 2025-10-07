@@ -17,6 +17,40 @@
     @test inplace_struct.grad_hess!.hess! === hess_fn!
 end
 
+@testitem "NaiveGradHess grad_hess! method covers separate calls" begin
+    import ExponentialFamilyProjection: NaiveGradHess
+
+    # Define simple separate grad! and hess! implementations
+    grad_fn! = (out, x) -> begin
+        out[1] = 2 * x[1]
+        out[2] = 2 * x[2]
+        out
+    end
+    hess_fn! = (out, x) -> begin
+        out[1, 1] = 2.0
+        out[1, 2] = 0.0
+        out[2, 1] = 0.0
+        out[2, 2] = 2.0
+        out
+    end
+
+    adapter = NaiveGradHess(grad_fn!, hess_fn!)
+    x = [0.5, -1.0]
+    out_grad = zeros(2)
+    out_hess = zeros(2, 2)
+
+    # Explicitly call the method under test to cover its body
+    g_ret, H_ret = ExponentialFamilyProjection.grad_hess!(adapter, out_grad, out_hess, x)
+    g_ret_call, H_ret_call = adapter(out_grad, out_hess, x)
+
+    @test out_grad == [2 * x[1], 2 * x[2]]
+    @test out_hess == [2.0 0.0; 0.0 2.0]
+    @test g_ret === out_grad
+    @test H_ret === out_hess
+    @test g_ret ≈ g_ret_call
+    @test H_ret ≈ H_ret_call
+end
+
 @testitem "InplaceLogpdfGradHess univariate case" begin
     import ExponentialFamilyProjection: InplaceLogpdfGradHess
     
