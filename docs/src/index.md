@@ -293,7 +293,7 @@ scatter!(
 )
 xlabel!("x₁")
 ylabel!("x₂")
-title!("mean boundary (Gauss–Newton)")
+title!("mean boundary")
 plt_mean # hide
 ```
 
@@ -349,7 +349,7 @@ scatter!(
 )
 xlabel!("x₁")
 ylabel!("x₂")
-title!("Gauss–Newton posterior")
+title!("full posterior boundary")
 plt_mc
 ```
 
