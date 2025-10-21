@@ -19,7 +19,6 @@ makedocs(;
         repolink="github.com/ReactiveBayes/ExponentialFamilyProjection.jl",
     ),
     pages = ["Home" => "index.md"],
-    repo = "github.com/ReactiveBayes/ExponentialFamilyProjection.jl",
 )
 
 deploydocs(;
