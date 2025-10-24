@@ -42,7 +42,7 @@ struct ProjectedTo{T,D,C,P,E}
 end
 
 ProjectedTo(
-    dims::Vararg{Int};
+    dims::Tuple{Vararg{Int}};
     conditioner = nothing,
     parameters = DefaultProjectionParameters(),
     kwargs = nothing,
