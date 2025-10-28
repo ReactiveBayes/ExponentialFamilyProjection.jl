@@ -195,7 +195,8 @@ function grad!(out::AbstractVector{T}, β::AbstractVector{T}) where {T<:Real}
         pi = 1 / (1 + exp(-Xβ[i]))
         @views out[:] .+= (y[i] - pi) .* X[i, :]
     end
-    return out / length(y)
+    out .= out ./ length(y)
+    return 
 end
 
 function hess!(out::AbstractMatrix{T}, β::AbstractVector{T}) where {T<:Real}
@@ -206,7 +207,8 @@ function hess!(out::AbstractMatrix{T}, β::AbstractVector{T}) where {T<:Real}
         wi = pi * (1 - pi)
         @views out .-= wi .* (X[i, :] * transpose(X[i, :]))
     end
-    return out / length(y)
+    out .= out ./ length(y)
+    return out
 end
 ```
 
@@ -408,7 +410,7 @@ speedup = t_manual / t_enzyme
 round.((speedup, t_manual, t_enzyme); digits = 3)
 ```
 
-On typical runs we observe a substantial speedup (often around 10×) for Enzyme while maintaining high numerical stability: the resulting distribution mean is much closer to the true coefficients with which we generated the dataset.
+On typical runs we observe a substantial speedup (often around 10×) for Enzyme while maintaining the same result.
 
 ### Projection with samples
 
