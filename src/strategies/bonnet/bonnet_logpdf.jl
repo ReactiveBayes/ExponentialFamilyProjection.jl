@@ -35,9 +35,9 @@ implementation and returns an `InplaceLogpdfGradHess` instance.
 # See also
 - `NaiveGradHess` — adapter that combines separate `grad!`/`hess!` into `grad_hess!`.
 """
-function InplaceLogpdfGradHess(logpdf!::F, grad!::G, hess!::H) where {F,G,H}
+function InplaceLogpdfGradHess(__logpdf::F, grad!::G, hess!::H) where {F,G,H}
     wrapper_grad_hess! = NaiveGradHess(grad!, hess!)
-    return InplaceLogpdfGradHess(logpdf!, wrapper_grad_hess!)
+    return InplaceLogpdfGradHess(__logpdf, wrapper_grad_hess!)
 end
 
 """
