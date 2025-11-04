@@ -36,6 +36,21 @@ Checks the compatibility of `strategy` with `argument` and returns a modified st
 function preprocess_strategy_argument end
 
 """
+    check_compatibility(projection_argument, manifold, prj::ProjectedTo)
+
+An optional interface for validating compatibility between a projection argument and the target manifold.
+
+This function can be implemented by users to perform custom validation checks before projection.
+By default, it does nothing, but users can override it to check:
+- Dimensionality compatibility between the projection argument and target distribution
+- Sample validity for the target distribution type
+- Other domain-specific constraints
+
+See the documentation in `projected_to.jl` for more details and examples.
+"""
+function check_compatibility end
+
+"""
     create_state!(
         strategy,
         M::AbstractManifold,
