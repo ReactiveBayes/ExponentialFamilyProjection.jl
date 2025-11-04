@@ -232,16 +232,41 @@ By default, it does nothing, but users can override it to check:
 - `manifold`: The target manifold for the projection
 - `prj::ProjectedTo`: The projection configuration
 
-# Example
+# Examples
 ```julia
-# For a custom projection argument type, implement validation:
+# Example 1: Check dimensionality for a custom logpdf type
+struct MyInplaceLogpdf
+    logpdf!::Function
+end
+
 function ExponentialFamilyProjection.check_compatibility(
-    projection_argument::MyCustomType, 
+    arg::MyInplaceLogpdf, 
     manifold::AbstractManifold, 
     prj::ProjectedTo
 )
-    # Perform custom checks here
-    # Throw an error if compatibility check fails
+    dims = ExponentialFamilyProjection.get_projected_to_dims(prj)
+    if !isempty(dims)
+        # Test with a sample input of the expected dimensions
+        test_sample = zeros(dims[1])
+        test_output = [0.0]
+        try
+            arg.logpdf!(test_output, test_sample)
+        catch e
+            error("Dimensionality mismatch: projection dimensions \$(dims) may be incompatible with logpdf! function")
+        end
+    end
+end
+
+# Example 2: Validate sample array dimensions
+function ExponentialFamilyProjection.check_compatibility(
+    samples::AbstractArray, 
+    manifold::AbstractManifold, 
+    prj::ProjectedTo
+)
+    dims = ExponentialFamilyProjection.get_projected_to_dims(prj)
+    if !isempty(dims) && size(samples, 1) != dims[1]
+        error("Sample dimension \$(size(samples, 1)) does not match projection dimension \$(dims[1])")
+    end
 end
 ```
 
