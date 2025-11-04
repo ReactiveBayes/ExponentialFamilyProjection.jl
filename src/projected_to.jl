@@ -214,6 +214,45 @@ function check_inputs(prj::ProjectedTo, projection_argument::F, supplementary...
             lazy"The initial point must be on the manifold `$(get_projected_to_manifold(prj))`, got `$(typeof(initialpoint))`",
         )
     end
+end
+
+"""
+    check_compatibility(projection_argument, manifold, prj::ProjectedTo)
+
+An optional interface for validating compatibility between a projection argument and the target manifold.
+
+This function can be implemented by users to perform custom validation checks before projection.
+By default, it does nothing, but users can override it to check:
+- Dimensionality compatibility between the projection argument and target distribution
+- Sample validity for the target distribution type
+- Other domain-specific constraints
+
+# Arguments
+- `projection_argument`: The argument being projected (typically a function or samples)
+- `manifold`: The target manifold for the projection
+- `prj::ProjectedTo`: The projection configuration
+
+# Example
+```julia
+# For a custom projection argument type, implement validation:
+function ExponentialFamilyProjection.check_compatibility(
+    projection_argument::MyCustomType, 
+    manifold::AbstractManifold, 
+    prj::ProjectedTo
+)
+    # Perform custom checks here
+    # Throw an error if compatibility check fails
+end
+```
+
+!!! note
+    This function is called before the projection optimization starts. By default, 
+    it performs no checks and returns immediately. Users are encouraged to implement
+    this method for their custom types when appropriate validation is needed.
+"""
+function check_compatibility(projection_argument, manifold, prj::ProjectedTo)
+    # Default implementation: do nothing
+    return nothing
 end 
 """
     project_to(to::ProjectedTo, argument::F, supplementary..., initialpoint, kwargs...)
@@ -290,13 +329,8 @@ function project_to(
         return copy(getnaturalparameters(supplementary_ef))
     end
 
-    try
-        projection_argument.logpdf!([0.0], randn(prj.dims))
-    catch e
-        error(
-            "The supplied projection dimensions `$(prj.dims)` may be invalid for the provided logpdf! function. Check dimensions and logpdf! function.\n",
-        )
-    end
+    # Allow users to implement custom compatibility checks for their projection arguments
+    check_compatibility(projection_argument, M, prj)
 
     strategy, projection_argument = preprocess_strategy_argument(
         getstrategy(projection_parameters),
