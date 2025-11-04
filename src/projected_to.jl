@@ -42,13 +42,36 @@ struct ProjectedTo{T,D,C,P,E}
 end
 
 ProjectedTo(
-    dims::Vararg{Int};
+    dims::Tuple{Vararg{Int}};
     conditioner = nothing,
     parameters = DefaultProjectionParameters(),
     kwargs = nothing,
 ) = ProjectedTo(
     ExponentialFamilyDistribution,
     dims...,
+    conditioner = conditioner,
+    parameters = parameters,
+    kwargs = kwargs,
+)
+ProjectedTo(;
+    conditioner = nothing,
+    parameters = DefaultProjectionParameters(),
+    kwargs = nothing,
+) = ProjectedTo(
+    ExponentialFamilyDistribution,
+    ()...,
+    conditioner = conditioner,
+    parameters = parameters,
+    kwargs = kwargs,
+)
+ProjectedTo(
+    dim::Int;
+    conditioner = nothing,
+    parameters = DefaultProjectionParameters(),
+    kwargs = nothing,
+) = ProjectedTo(
+    ExponentialFamilyDistribution,
+    dim,
     conditioner = conditioner,
     parameters = parameters,
     kwargs = kwargs,
