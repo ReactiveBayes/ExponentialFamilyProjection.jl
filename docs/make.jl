@@ -16,10 +16,9 @@ makedocs(;
         canonical = "https://reactivebayes.github.io/ExponentialFamilyProjection.jl",
         edit_link = "main",
         assets = String[],
-        repolink="github.com/ReactiveBayes/ExponentialFamilyProjection.jl",
+        repolink="https://github.com/ReactiveBayes/ExponentialFamilyProjection.jl"
     ),
     pages = ["Home" => "index.md"],
-    repo = "github.com/ReactiveBayes/ExponentialFamilyProjection.jl",
 )
 
 deploydocs(;
