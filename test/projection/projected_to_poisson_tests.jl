@@ -9,7 +9,11 @@
     end
 
     @testset let distribution = Poisson(10)
-        @test test_projection_convergence(distribution, nsamples_range = 500:200:4000, niterations_nsamples = 700)
+        @test test_projection_convergence(
+            distribution,
+            nsamples_range = 500:200:4000,
+            niterations_nsamples = 700,
+        )
     end
 
     @testset let distribution = Poisson(0.5)

@@ -4,9 +4,13 @@
 DOCSRC = docs
 DOCTARGET = $(DOCSRC)/build
 
+SCRIPTSRC = scripts
+FORMATTER = $(SCRIPTSRC)/formatter.jl
+
 JULIA ?= julia
 JULIAFLAGS ?= --project=.
 JULIAFLAGSDOCS ?= --project=$(DOCSRC)
+JULIAFLAGSSCRIPTS ?= --project=$(SCRIPTSRC)
 
 # Colors for terminal output
 ifdef NO_COLOR
@@ -38,7 +42,10 @@ help:
 	@echo '${GREEN}Development commands:${RESET}'
 	@echo '  ${YELLOW}deps${RESET}                 Install project dependencies'
 	@echo '  ${YELLOW}deps-docs${RESET}            Install documentation dependencies'
+	@echo '  ${YELLOW}deps-scripts${RESET}         Install script dependencies'
 	@echo '  ${YELLOW}test${RESET}                 Run project tests'
+	@echo '  ${YELLOW}format${RESET}               Format Julia code'
+	@echo '  ${YELLOW}check-format${RESET}         Check Julia code formatting (does not modify files)'
 	@echo '  ${YELLOW}clean${RESET}                Clean all generated files'
 	@echo ''
 	@echo '${GREEN}Help:${RESET}'
@@ -68,8 +75,17 @@ deps: ## Install project dependencies
 deps-docs: ## Install documentation dependencies
 	$(JULIA) $(JULIAFLAGSDOCS) -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
 
+deps-scripts: ## Install script dependencies
+	$(JULIA) $(JULIAFLAGSSCRIPTS) -e 'using Pkg; Pkg.instantiate()'
+
 test: deps ## Run project tests
 	$(JULIA) $(JULIAFLAGS) -e 'using Pkg; Pkg.test(test_args = split("$(test_args)") .|> string)'	
+
+format: deps-scripts ## Format Julia code
+	$(JULIA) $(JULIAFLAGSSCRIPTS) $(FORMATTER) --overwrite
+
+check-format: deps-scripts ## Check Julia code formatting (does not modify files)
+	$(JULIA) $(JULIAFLAGSSCRIPTS) $(FORMATTER)
 
 clean: docs-clean ## Clean all generated files
 	rm -rf .julia/compiled

@@ -1,4 +1,5 @@
-using ExponentialFamily, Distributions, BayesBase, StableRNGs, RollingFunctions, Manopt, ForwardDiff
+using ExponentialFamily,
+    Distributions, BayesBase, StableRNGs, RollingFunctions, Manopt, ForwardDiff
 import ExponentialFamilyProjection: InplaceLogpdfGradHess, BonnetStrategy, GaussNewton
 
 function test_projection_mle(
@@ -368,7 +369,7 @@ end
 
 # Helper function to create InplaceLogpdfGradHess for BonnetStrategy testing
 function create_bonnet_target(distribution)
-    
+
     if distribution isa NormalMeanVariance
         # Univariate case
         logpdf_fn = (out, x) -> (out[1] = logpdf(distribution, x))
@@ -376,7 +377,12 @@ function create_bonnet_target(distribution)
             (out, x) -> (out[1] = ForwardDiff.derivative(x -> logpdf(distribution, x), x))
         end
         hess_fn = let ForwardDiff = ForwardDiff
-            (out, x) -> (out[1] = ForwardDiff.derivative(x -> ForwardDiff.derivative(x -> logpdf(distribution, x), x), x))
+            (out, x) -> (
+                out[1] = ForwardDiff.derivative(
+                    x -> ForwardDiff.derivative(x -> logpdf(distribution, x), x),
+                    x,
+                )
+            )
         end
     else
         # Multivariate case
@@ -405,12 +411,14 @@ function test_bonnet_projection_convergence(
     nsamples_rng = StableRNG(42),
     kwargs...,
 )
-    T = ismissing(to) ?
+    T =
+        ismissing(to) ?
         ExponentialFamily.exponential_family_typetag(
             convert(ExponentialFamilyDistribution, distribution),
         ) : to
     dims = ismissing(dims) ? size(rand(StableRNG(42), distribution)) : dims
-    conditioner = ismissing(conditioner) ?
+    conditioner =
+        ismissing(conditioner) ?
         getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
 
     bonnet_target = create_bonnet_target(distribution)
@@ -423,7 +431,8 @@ function test_bonnet_projection_convergence(
             stepsize = nsamples_stepsize,
             seed = rand(nsamples_rng, UInt),
         )
-        projection = ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
+        projection =
+            ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
         approximated = project_to(projection, bonnet_target)
         divergence = test_convergence_metric(approximated, distribution)
         return divergence, approximated
@@ -457,7 +466,7 @@ function test_bonnet_niterations_convergence(
     niterations_required_accuracy = 1e-1,
     niterations_stepsize = ConstantLength(0.1),
     niterations_rng = StableRNG(42),
-    kwargs...
+    kwargs...,
 )
     bonnet_target = create_bonnet_target(distribution)
 
@@ -508,12 +517,14 @@ function test_gaussnewton_projection_convergence(
     niterations_rng = StableRNG(42),
     kwargs...,
 )
-    T = ismissing(to) ?
+    T =
+        ismissing(to) ?
         ExponentialFamily.exponential_family_typetag(
             convert(ExponentialFamilyDistribution, distribution),
         ) : to
     dims = ismissing(dims) ? size(rand(StableRNG(42), distribution)) : dims
-    conditioner = ismissing(conditioner) ?
+    conditioner =
+        ismissing(conditioner) ?
         getconditioner(convert(ExponentialFamilyDistribution, distribution)) : conditioner
 
     target = create_bonnet_target(distribution)
@@ -526,7 +537,8 @@ function test_gaussnewton_projection_convergence(
             stepsize = niterations_stepsize,
             seed = rand(niterations_rng, UInt),
         )
-        projection = ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
+        projection =
+            ProjectedTo(T, dims..., parameters = parameters, conditioner = conditioner)
         approximated = project_to(projection, target)
         divergence = test_convergence_metric(approximated, distribution)
         return divergence, approximated
@@ -550,4 +562,3 @@ function test_gaussnewton_projection_convergence(
 
     return test_required_accuracy && test_convergence
 end
-

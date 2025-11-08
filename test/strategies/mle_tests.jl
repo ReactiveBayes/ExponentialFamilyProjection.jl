@@ -37,7 +37,9 @@ end
             Poisson(0.5),
             Chisq(30.0),
             Gamma(1, 1),
-        ],nsamples in (100, 500)
+        ],
+        nsamples in (100, 500)
+
         ef = convert(ExponentialFamilyDistribution, distribution)
         samples = rand(rng, ef, nsamples)
 
@@ -49,7 +51,14 @@ end
         η = getnaturalparameters(ef)
 
         strategy = ExponentialFamilyProjection.MLEStrategy()
-        state = ExponentialFamilyProjection.create_state!(strategy, M, proj_params, samples, ef, ())
+        state = ExponentialFamilyProjection.create_state!(
+            strategy,
+            M,
+            proj_params,
+            samples,
+            ef,
+            (),
+        )
         obj = ExponentialFamilyProjection.ProjectionCostGradientObjective(
             proj_params,
             samples,

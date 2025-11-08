@@ -31,7 +31,12 @@ get_supplementary_η(obj::ProjectionCostGradientObjective) = obj.supplementary_�
 get_strategy(obj::ProjectionCostGradientObjective) = obj.strategy
 get_strategy_state(obj::ProjectionCostGradientObjective) = obj.strategy_state
 
-function call_objective(objective::ProjectionCostGradientObjective, M::AbstractManifold, X, p)
+function call_objective(
+    objective::ProjectionCostGradientObjective,
+    M::AbstractManifold,
+    X,
+    p,
+)
     current_ef = convert(ExponentialFamilyDistribution, M, p)
     current_η = copyto!(get_current_η(objective), getnaturalparameters(current_ef))
 
@@ -89,5 +94,3 @@ end
 function (objective::ProjectionCostGradientObjective)(M::AbstractManifold, X, p)
     return call_objective(objective, M, X, p)
 end
-
-

@@ -16,7 +16,7 @@ The following parameters are available:
     This strategy requires a logpdf function that can be converted to an `InplaceLogpdfGradHess` object.
     This strategy requires the normal manifold.
 """
-Base.@kwdef struct BonnetStrategy{S, TL}
+Base.@kwdef struct BonnetStrategy{S,TL}
     nsamples::S = 2000
     base_logpdf_type::Type{TL} = InplaceLogpdfGradHess
 end
@@ -29,7 +29,7 @@ preprocess_strategy_argument(::BonnetStrategy, argument::AbstractArray) = error(
     lazy"The `BonnetStrategy` requires the projection argument to be a callable object (e.g. `Function`) or an `InplaceLogpdfGradHess`. Got `$(typeof(argument))` instead.",
 )
 
-Base.@kwdef struct BonnetStrategyState{S, L, LB, G, H, M}
+Base.@kwdef struct BonnetStrategyState{S,L,LB,G,H,M}
     samples::S
     logpdfs::L
     logbasemeasures::LB
@@ -57,11 +57,12 @@ function create_state!(
     # Create containers for the BonnetStrategy state
     nsamples = get_nsamples(strategy)
     rng = getrng(parameters)
-    
+
     # Prepare containers following the same pattern as ControlVariateStrategy
     samples = prepare_samples_container(rng, initial_ef, nsamples, supplementary_η)
     logpdfs = prepare_logpdfs_container(rng, initial_ef, nsamples, supplementary_η)
-    logbasemeasures = prepare_logbasemeasures_container(rng, initial_ef, nsamples, supplementary_η)
+    logbasemeasures =
+        prepare_logbasemeasures_container(rng, initial_ef, nsamples, supplementary_η)
     grads = prepare_grads_container(rng, initial_ef, nsamples, supplementary_η)
     hessians = prepare_hessians_container(rng, initial_ef, nsamples, supplementary_η)
     current_mean = prepare_current_mean_container(rng, initial_ef, supplementary_η)
@@ -86,19 +87,17 @@ function create_state!(
     )
 end
 
-prepare_grads_container(rng, distribution, nsamples, supplementary_η) =
-    zeros(
-        paramfloattype(distribution),
-        length(mean(distribution)),  # dimension of the sample space
-        nsamples,
-    )
-prepare_hessians_container(rng, distribution, nsamples, supplementary_η) =
-    zeros(
-        paramfloattype(distribution),
-        length(mean(distribution)),  # dimension of the sample space
-        length(mean(distribution)),  # dimension of the sample space  
-        nsamples,
-    )
+prepare_grads_container(rng, distribution, nsamples, supplementary_η) = zeros(
+    paramfloattype(distribution),
+    length(mean(distribution)),  # dimension of the sample space
+    nsamples,
+)
+prepare_hessians_container(rng, distribution, nsamples, supplementary_η) = zeros(
+    paramfloattype(distribution),
+    length(mean(distribution)),  # dimension of the sample space
+    length(mean(distribution)),  # dimension of the sample space  
+    nsamples,
+)
 prepare_current_mean_container(rng, distribution, supplementary_η) =
     zeros(paramfloattype(distribution), length(mean(distribution)))
 
@@ -118,14 +117,15 @@ function prepare_state!(
     Random.seed!(getrng(parameters), getseed(parameters))
     Random.rand!(getrng(parameters), current_ef, get_samples(state))
 
-   
+
     _, sample_container = ExponentialFamily.check_logpdf(current_ef, get_samples(state))
     inplace_projection_argument! = convert(TL, projection_argument)
-    
+
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
     nonconstantbasemeasure =
-        ExponentialFamily.isbasemeasureconstant(current_ef) === ExponentialFamily.NonConstantBaseMeasure()
-    
+        ExponentialFamily.isbasemeasureconstant(current_ef) ===
+        ExponentialFamily.NonConstantBaseMeasure()
+
     # Evaluate logpdf, grad, and hess for each sample
     for (i, sample) in enumerate(sample_container)
         # if `basemeasure` is constant we assume that 
@@ -135,19 +135,20 @@ function prepare_state!(
                 one_minus_n_of_supplementary *
                 ExponentialFamily.logbasemeasure(current_ef, sample)
         end
-        
+
         logpdf!(inplace_projection_argument!, view(get_logpdfs(state), i:i), sample)
         grad_hess!(
             inplace_projection_argument!,
             view(get_grads(state), :, i),
-            view(get_hessians(state), :, :, i),
+            view(get_hessians(state),:,:,i),
             sample,
         )
     end
-    
+
     current_nat_param = getnaturalparameters(current_ef)
     exponential_family_typetag = ExponentialFamily.exponential_family_typetag(current_ef)
-    η1, η2 = ExponentialFamily.unpack_parameters(exponential_family_typetag, current_nat_param)
+    η1, η2 =
+        ExponentialFamily.unpack_parameters(exponential_family_typetag, current_nat_param)
     state.current_mean .= (-2η2) \ η1
     return state
 end
@@ -158,9 +159,10 @@ function compute_cost(
     state::BonnetStrategyState,
     η,
     gradlogpartition,
-    logpartition
+    logpartition,
 )
-    return dot(gradlogpartition, η) - mean(get_logpdfs(state)) - logpartition + mean(get_logbasemeasures(state))
+    return dot(gradlogpartition, η) - mean(get_logpdfs(state)) - logpartition +
+           mean(get_logbasemeasures(state))
 end
 
 function compute_gradient!(
@@ -178,7 +180,7 @@ function bonnet_compute_gradient!(
     ::BonnetStrategy,
     state::BonnetStrategyState,
     X,
-    η
+    η,
 )
     mean_grad_vector_η_1 = mean(get_grads(state), dims = 2)[:, 1]
     mean_hess_vector_η_2 = mean(get_hessians(state), dims = 3)[:, :, 1]
@@ -194,8 +196,8 @@ function call_objective(
     objective::ProjectionCostGradientObjective{J,F,C,P,S},
     M::AbstractManifold,
     X,
-    p
-) where {J,F,C,P,S <: BonnetStrategy}
+    p,
+) where {J,F,C,P,S<:BonnetStrategy}
     current_ef = convert(ExponentialFamilyDistribution, M, p)
     current_η = copyto!(get_current_η(objective), getnaturalparameters(current_ef))
 
@@ -224,22 +226,9 @@ function call_objective(
         map!(-, current_η, current_η, s_η)
     end
 
-    c = compute_cost(
-        M,
-        strategy,
-        state,
-        current_η,
-        gradlogpartition,
-        logpartition
-    )
+    c = compute_cost(M, strategy, state, current_η, gradlogpartition, logpartition)
 
-    X_nat = compute_gradient!(
-        M,
-        strategy,
-        state,
-        X,
-        current_η,
-    )
+    X_nat = compute_gradient!(M, strategy, state, X, current_η)
     X = jacobian_nat_to_manifold!(M, X, X_nat)
     X = project!(M, X, p, X)
     return c, X
