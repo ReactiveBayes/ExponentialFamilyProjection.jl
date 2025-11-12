@@ -29,7 +29,7 @@
         if do_debug
             lines = split(debug_string, '\n')
             @test length(lines) == n_iterations + 2
-            @test all(map(line -> occursin(r"f\(x\): -?\d+\.\d+", line), lines[2:end-1]))
+            @test all(map(line -> occursin(r"f\(x\): -?\d+\.\d+", line), lines[2:(end-1)]))
         else
             @test debug_string == ""
         end

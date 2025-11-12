@@ -131,7 +131,8 @@ end
                 parameters = ProjectionParameters(rng = rng)
                 strategy = ControlVariateStrategy(nsamples = nsamples)
 
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions, ForwardDiff) create_state!(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) create_state!(
                     strategy,
                     M,
                     parameters,
@@ -140,31 +141,36 @@ end
                     supplementary_η,
                 )
 
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_samples_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_samples_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_logpdfs_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_logpdfs_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_logbasemeasures_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_logbasemeasures_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_sufficientstatistics_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_sufficientstatistics_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_gradsamples_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_gradsamples_container(
                     rng,
                     ef,
                     nsamples,

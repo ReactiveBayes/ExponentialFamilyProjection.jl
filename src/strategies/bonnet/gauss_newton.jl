@@ -23,7 +23,7 @@ preprocess_strategy_argument(::GaussNewton, argument::AbstractArray) = error(
     lazy"The `GaussNewton` strategy requires the projection argument to be a callable object (e.g. `Function`) or an `InplaceLogpdfGradHess`. Got `$(typeof(argument))` instead.",
 )
 
-Base.@kwdef struct GaussNewtonState{S, L, LB, G, H, M}
+Base.@kwdef struct GaussNewtonState{S,L,LB,G,H,M}
     samples::S
     logpdfs::L
     logbasemeasures::LB
@@ -52,7 +52,12 @@ function create_state!(
     state = GaussNewtonState(
         samples = prepare_samples_container(rng, initial_ef, nsamples, supplementary_η),
         logpdfs = prepare_logpdfs_container(rng, initial_ef, nsamples, supplementary_η),
-        logbasemeasures = prepare_logbasemeasures_container(rng, initial_ef, nsamples, supplementary_η),
+        logbasemeasures = prepare_logbasemeasures_container(
+            rng,
+            initial_ef,
+            nsamples,
+            supplementary_η,
+        ),
         grad = zeros(T, xdim),
         hessian = zeros(T, xdim, xdim),
         current_mean = zeros(T, xdim),
@@ -72,8 +77,17 @@ function _compute_grad_hess_state!(::Any, state, inplace_projection_argument!)
     grad_hess!(inplace_projection_argument!, state.grad, state.hessian, state.current_mean)
 end
 
-function _compute_grad_hess_state!(::Type{ExponentialFamily.NormalMeanVariance}, state, inplace_projection_argument!)
-    grad_hess!(inplace_projection_argument!, state.grad, state.hessian, state.current_mean[1])
+function _compute_grad_hess_state!(
+    ::Type{ExponentialFamily.NormalMeanVariance},
+    state,
+    inplace_projection_argument!,
+)
+    grad_hess!(
+        inplace_projection_argument!,
+        state.grad,
+        state.hessian,
+        state.current_mean[1],
+    )
 end
 
 function prepare_state!(
@@ -94,13 +108,15 @@ function prepare_state!(
     _, sample_container = ExponentialFamily.check_logpdf(current_ef, get_samples(state))
     one_minus_n_of_supplementary = 1 - length(supplementary_η)
     nonconstantbasemeasure =
-        ExponentialFamily.isbasemeasureconstant(current_ef) === ExponentialFamily.NonConstantBaseMeasure()
+        ExponentialFamily.isbasemeasureconstant(current_ef) ===
+        ExponentialFamily.NonConstantBaseMeasure()
 
     # Evaluate logpdf (and base measure if needed) for each sample for the cost
     for (i, sample) in enumerate(sample_container)
         if nonconstantbasemeasure
             @inbounds get_logbasemeasures(state)[i] =
-                one_minus_n_of_supplementary * ExponentialFamily.logbasemeasure(current_ef, sample)
+                one_minus_n_of_supplementary *
+                ExponentialFamily.logbasemeasure(current_ef, sample)
         end
         logpdf!(inplace_projection_argument!, view(get_logpdfs(state), i:i), sample)
     end
@@ -125,7 +141,8 @@ function compute_cost(
     gradlogpartition,
     logpartition,
 )
-    return dot(gradlogpartition, η) - mean(get_logpdfs(state)) - logpartition + mean(get_logbasemeasures(state))
+    return dot(gradlogpartition, η) - mean(get_logpdfs(state)) - logpartition +
+           mean(get_logbasemeasures(state))
 end
 
 function compute_gradient!(
@@ -148,7 +165,7 @@ function call_objective(
     M::AbstractManifold,
     X,
     p,
-) where {J,F,C,P,S <: GaussNewton}
+) where {J,F,C,P,S<:GaussNewton}
     current_ef = convert(ExponentialFamilyDistribution, M, p)
     current_η = copyto!(get_current_η(objective), getnaturalparameters(current_ef))
 
@@ -175,22 +192,9 @@ function call_objective(
         map!(-, current_η, current_η, s_η)
     end
 
-    c = compute_cost(
-        M,
-        strategy,
-        state,
-        current_η,
-        gradlogpartition,
-        logpartition,
-    )
+    c = compute_cost(M, strategy, state, current_η, gradlogpartition, logpartition)
 
-    X_nat = compute_gradient!(
-        M,
-        strategy,
-        state,
-        X,
-        current_η,
-    )
+    X_nat = compute_gradient!(M, strategy, state, X, current_η)
     X = jacobian_nat_to_manifold!(M, X, X_nat)
     X = project!(M, X, p, X)
     return c, X

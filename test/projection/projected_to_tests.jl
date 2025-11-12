@@ -518,7 +518,7 @@ end
         nothing,
     )
     initialpoint = rand(manifold)
-    direction = MomentumGradient(p=initialpoint)
+    direction = MomentumGradient(p = initialpoint)
 
     momentum_parameters =
         ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
@@ -576,15 +576,13 @@ end
 
     initialpoint = rand(rng, manifold)
 
-    direction = ExponentialFamilyProjection.BoundedNormUpdateRule(10.0; 
-        direction = Manopt.MomentumGradient(p=initialpoint)
+    direction = ExponentialFamilyProjection.BoundedNormUpdateRule(
+        10.0;
+        direction = Manopt.MomentumGradient(p = initialpoint),
     )
 
-    combined_parameters = ProjectionParameters(
-        direction = direction, 
-        niterations = 1000, 
-        tolerance = 1e-8
-    )
+    combined_parameters =
+        ProjectionParameters(direction = direction, niterations = 1000, tolerance = 1e-8)
 
     projection = ProjectedTo(MvNormalMeanCovariance, 2, parameters = combined_parameters)
     approximated = project_to(projection, samples, initialpoint = initialpoint)
@@ -608,20 +606,18 @@ end
     )
     initialpoint = rand(manifold)
 
-    update_rules = [
-        Nesterov(),
-        MomentumGradient(momentum=0.9),
-        Manopt.IdentityUpdateRule()
-    ]
+    update_rules =
+        [Nesterov(), MomentumGradient(momentum = 0.9), Manopt.IdentityUpdateRule()]
     for update_rule in update_rules
-        direction = ExponentialFamilyProjection.BoundedNormUpdateRule(1000.0; 
-            direction = update_rule
+        direction = ExponentialFamilyProjection.BoundedNormUpdateRule(
+            1000.0;
+            direction = update_rule,
         )
 
-        momentum_parameters =
-            ProjectionParameters(direction = direction, tolerance = 1e-8)
+        momentum_parameters = ProjectionParameters(direction = direction, tolerance = 1e-8)
 
-        projection = ProjectedTo(MvNormalMeanCovariance, 3, parameters = momentum_parameters)
+        projection =
+            ProjectedTo(MvNormalMeanCovariance, 3, parameters = momentum_parameters)
 
         approximated = project_to(projection, logp, initialpoint = initialpoint)
 
@@ -637,7 +633,7 @@ end
     logp = (x) -> logpdf(true_dist, x)
 
 
-    for i in 1:10
+    for i = 1:10
         manifold = ExponentialFamilyManifolds.get_natural_manifold(
             MvNormalMeanCovariance,
             (i,),
@@ -651,7 +647,11 @@ end
             logp,
             initialpoint = initialpoint,
         )
-        @test ExponentialFamilyProjection.check_inputs(projection, logp; initialpoint=nothing) === nothing
+        @test ExponentialFamilyProjection.check_inputs(
+            projection,
+            logp;
+            initialpoint = nothing,
+        ) === nothing
     end
 end
 
@@ -668,7 +668,7 @@ end
     include("batch_logpdf.jl")
 
     # Create a delayed normal distribution
-    function create_delayed_normal(delay_seconds=0.1)
+    function create_delayed_normal(delay_seconds = 0.1)
         dist = NormalMeanVariance(0.0, 1.0)
         return function delayed_logpdf(x)
             sleep(delay_seconds) # expansive operation (for example moving data to GPU)
@@ -676,7 +676,7 @@ end
         end
     end
 
-    delay = 0.0001  
+    delay = 0.0001
     batch_logpdf = BatchLogpdf(create_delayed_normal(delay))
     regular_inplace = convert(InplaceLogpdf, create_delayed_normal(delay));
 
@@ -695,49 +695,49 @@ end
     bench_regular = @benchmark regular_inplace(out2, samples) seconds=1
     bench_batch = @benchmark batch_logpdf(out1, samples) seconds=1
 
-    @test isapprox(mean(bench_converted.times), mean(bench_regular.times), rtol=1e-1)
+    @test isapprox(mean(bench_converted.times), mean(bench_regular.times), rtol = 1e-1)
 
     # This is not a correctness test, but a performance test.
     # On Julia 1.11, the batch logpdf is faster than on Julia 1.10.
     @static if VERSION >= v"1.11"
         @test mean(bench_batch.times) < mean(bench_regular.times)/5
-    else 
+    else
         @test mean(bench_batch.times) < mean(bench_regular.times)
     end
 
     # Create strategies with different base_logpdf_type
     batch_size = 10
     strategy_batch = ExponentialFamilyProjection.ControlVariateStrategy(
-        nsamples=nsamples,
-        base_logpdf_type=BatchLogpdf{batch_size} # Ensure we're using the same buffer type
+        nsamples = nsamples,
+        base_logpdf_type = BatchLogpdf{batch_size}, # Ensure we're using the same buffer type
     )
 
     strategy_inplace = ExponentialFamilyProjection.ControlVariateStrategy(
-        nsamples=nsamples,
-        base_logpdf_type=InplaceLogpdf
+        nsamples = nsamples,
+        base_logpdf_type = InplaceLogpdf,
     )
 
     projection_batch = ProjectedTo(
-        NormalMeanVariance, 
-        parameters=ProjectionParameters(
-            niterations=3,
-            tolerance=1e-1,
-            strategy=strategy_batch
-        )
+        NormalMeanVariance,
+        parameters = ProjectionParameters(
+            niterations = 3,
+            tolerance = 1e-1,
+            strategy = strategy_batch,
+        ),
     )
 
     projection_inplace = ProjectedTo(
-        NormalMeanVariance, 
-        parameters=ProjectionParameters(
-            niterations=3,
-            tolerance=1e-1,
-            strategy=strategy_inplace
-        )
+        NormalMeanVariance,
+        parameters = ProjectionParameters(
+            niterations = 3,
+            tolerance = 1e-1,
+            strategy = strategy_inplace,
+        ),
     )
 
     # Add counter to track number of logpdf calls
     ncalls = 0
-    target_logpdf = function(x)
+    target_logpdf = function (x)
         global ncalls += 1
         sleep(delay)
         return logpdf(NormalMeanVariance(0.0, 1.0), x)

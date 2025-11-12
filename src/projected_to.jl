@@ -205,7 +205,13 @@ end
 
 using Manopt
 
-function check_inputs(prj::ProjectedTo, projection_argument::F, supplementary...; initialpoint = nothing, kwargs...) where {F}
+function check_inputs(
+    prj::ProjectedTo,
+    projection_argument::F,
+    supplementary...;
+    initialpoint = nothing,
+    kwargs...,
+) where {F}
     if isnothing(initialpoint)
         return
     end
@@ -214,7 +220,7 @@ function check_inputs(prj::ProjectedTo, projection_argument::F, supplementary...
             lazy"The initial point must be on the manifold `$(get_projected_to_manifold(prj))`, got `$(typeof(initialpoint))`",
         )
     end
-end 
+end
 """
     project_to(to::ProjectedTo, argument::F, supplementary..., initialpoint, kwargs...)
 
@@ -294,8 +300,15 @@ function project_to(
         getstrategy(projection_parameters),
         projection_argument,
     )
-    current_iteration_point = preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
-    check_inputs(prj, projection_argument, supplementary...; initialpoint = current_iteration_point, kwargs...)
+    current_iteration_point =
+        preprocess_initialpoint(initialpoint, strategy, M, projection_parameters)
+    check_inputs(
+        prj,
+        projection_argument,
+        supplementary...;
+        initialpoint = current_iteration_point,
+        kwargs...,
+    )
     current_ef = convert(ExponentialFamilyDistribution, M, current_iteration_point)
     state = create_state!(
         strategy,

@@ -15,10 +15,10 @@ The following parameters are available:
 !!! note
     This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
-Base.@kwdef struct ControlVariateStrategy{S, B, TL}
+Base.@kwdef struct ControlVariateStrategy{S,B,TL}
     nsamples::S = 2000
     buffer::B = Bumper.SlabBuffer()
-    base_logpdf_type::Type{TL}  = InplaceLogpdf
+    base_logpdf_type::Type{TL} = InplaceLogpdf
 end
 
 get_nsamples(strategy::ControlVariateStrategy) = strategy.nsamples
@@ -28,8 +28,10 @@ function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
     return get_nsamples(a) == get_nsamples(b) && get_buffer(a) == get_buffer(b)
 end
 
-preprocess_strategy_argument(strategy::ControlVariateStrategy{S,B,TL}, argument::Any) where {S,B,TL} =
-    (strategy, convert(TL, argument))
+preprocess_strategy_argument(
+    strategy::ControlVariateStrategy{S,B,TL},
+    argument::Any,
+) where {S,B,TL} = (strategy, convert(TL, argument))
 preprocess_strategy_argument(::ControlVariateStrategy, argument::AbstractArray) = error(
     lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(argument))` instead.",
 )

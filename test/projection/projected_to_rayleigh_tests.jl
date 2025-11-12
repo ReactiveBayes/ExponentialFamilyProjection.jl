@@ -33,17 +33,11 @@ end
     include("./projected_to_setuptests.jl")
 
     @testset let distribution = Gamma(4, 10)
-        @test test_projection_convergence(
-            distribution,
-            to = Rayleigh
-        )
+        @test test_projection_convergence(distribution, to = Rayleigh)
     end
 
     @testset let distribution = Gamma(40, 10)
-        @test_broken test_projection_convergence(
-            distribution,
-            to = Rayleigh
-        )
+        @test_broken test_projection_convergence(distribution, to = Rayleigh)
     end
 end
 
@@ -54,10 +48,7 @@ end
     include("./projected_to_setuptests.jl")
 
     @testset let distribution = LogNormal(0.1, 1)
-        @test_broken test_projection_convergence(
-            distribution,
-            to = Rayleigh
-        )
+        @test_broken test_projection_convergence(distribution, to = Rayleigh)
     end
 end
 

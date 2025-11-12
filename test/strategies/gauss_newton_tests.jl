@@ -183,13 +183,19 @@ end
     nsamples = 1000
 
     println("\nPerformance comparison: GaussNewton vs ControlVariateStrategy")
-    println("Dimension | GaussNewton (μs) | ControlVariateStrategy (μs) | Speedup | Memory Ratio")
-    println("----------|-------------------|-----------------------------|---------|--------------")
+    println(
+        "Dimension | GaussNewton (μs) | ControlVariateStrategy (μs) | Speedup | Memory Ratio",
+    )
+    println(
+        "----------|-------------------|-----------------------------|---------|--------------",
+    )
 
     for dim in dimensions
         # Create high-dimensional normal distribution
         μ = randn(StableRNG(42), dim)
-        Σ = let A = randn(StableRNG(43), dim, dim); A * A' + 0.1 * I end
+        Σ = let A = randn(StableRNG(43), dim, dim);
+            A * A' + 0.1 * I
+        end
         dist = MvNormalMeanCovariance(μ, Σ)
 
         # Create target function for the same distribution
@@ -221,9 +227,15 @@ end
         # Benchmark GaussNewton using ProjectionCostGradientObjective
         gn_benchmark = @benchmark begin
             gn_strategy = GaussNewton(nsamples = $nsamples)
-            gn_state = create_state!(gn_strategy, $M, $test_parameters, $gn_target, $ef, ())
+            gn_state =
+                create_state!(gn_strategy, $M, $test_parameters, $gn_target, $ef, ())
             gn_obj = ProjectionCostGradientObjective(
-                $test_parameters, $gn_target, copy($η), (), gn_strategy, gn_state
+                $test_parameters,
+                $gn_target,
+                copy($η),
+                (),
+                gn_strategy,
+                gn_state,
             )
             X_gn = Manifolds.zero_vector($M, $p_manifold)
             cost_gn, X_gn = gn_obj($M, X_gn, $p_manifold)
@@ -232,9 +244,21 @@ end
         # Benchmark ControlVariateStrategy using ProjectionCostGradientObjective
         cv_benchmark = @benchmark begin
             cv_strategy = ControlVariateStrategy(nsamples = $nsamples, buffer = nothing)
-            cv_state = create_state!(cv_strategy, $M, $test_parameters, $target_logpdf, $ef, ())
+            cv_state = create_state!(
+                cv_strategy,
+                $M,
+                $test_parameters,
+                $target_logpdf,
+                $ef,
+                (),
+            )
             cv_obj = ProjectionCostGradientObjective(
-                $test_parameters, $target_logpdf, copy($η), (), cv_strategy, cv_state
+                $test_parameters,
+                $target_logpdf,
+                copy($η),
+                (),
+                cv_strategy,
+                cv_state,
             )
             X_cv = Manifolds.zero_vector($M, $p_manifold)
             cost_cv, X_cv = cv_obj($M, X_cv, $p_manifold)
@@ -250,8 +274,16 @@ end
         memory_ratio = cv_memory / gn_memory
 
         # Print results
-        println(@sprintf("%9d | %17.1f | %27.1f | %6.2fx | %12.2fx",
-                dim, gn_time_μs, cv_time_μs, speedup, memory_ratio))
+        println(
+            @sprintf(
+                "%9d | %17.1f | %27.1f | %6.2fx | %12.2fx",
+                dim,
+                gn_time_μs,
+                cv_time_μs,
+                speedup,
+                memory_ratio
+            )
+        )
 
         # Test that both strategies produce similar outputs (functional correctness)
         parameters = ProjectionParameters(rng = StableRNG(42), seed = 42)
@@ -260,7 +292,12 @@ end
         gn_strategy = GaussNewton(nsamples = nsamples)
         gn_state = create_state!(gn_strategy, M, parameters, gn_target, ef, ())
         gn_obj = ProjectionCostGradientObjective(
-            parameters, gn_target, copy(η), (), gn_strategy, gn_state
+            parameters,
+            gn_target,
+            copy(η),
+            (),
+            gn_strategy,
+            gn_state,
         )
         X_gn = Manifolds.zero_vector(M, p_manifold)
         cost_gn, X_gn = gn_obj(M, X_gn, p_manifold)
@@ -268,7 +305,12 @@ end
         cv_strategy = ControlVariateStrategy(nsamples = nsamples, buffer = nothing)
         cv_state = create_state!(cv_strategy, M, parameters, target_logpdf, ef, ())
         cv_obj = ProjectionCostGradientObjective(
-            parameters, target_logpdf, copy(η), (), cv_strategy, cv_state
+            parameters,
+            target_logpdf,
+            copy(η),
+            (),
+            cv_strategy,
+            cv_state,
         )
         X_cv = Manifolds.zero_vector(M, p_manifold)
         cost_cv, X_cv = cv_obj(M, X_cv, p_manifold)
@@ -279,5 +321,3 @@ end
         end
     end
 end
-
-
