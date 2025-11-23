@@ -58,18 +58,7 @@ function call_objective(
 
     logpartition = ExponentialFamily.logpartition(current_ef)
     gradlogpartition = ExponentialFamily.gradlogpartition(current_ef)
-    fisher = ExponentialFamily.fisherinformation(current_ef)
-    inv_fisher = try
-        cholinv(fisher)
-    catch e
-        # If the Fisher information matrix is not positive definite, we try to compute the pseudo-inverse
-        # This can happen if the distribution is degenerate or if the parameters are on the boundary
-        if e isa PosDefException || e isa LinearAlgebra.PosDefException
-            pinv(fisher)
-        else
-            rethrow(e)
-        end
-    end
+    inv_fisher = cholinv(ExponentialFamily.fisherinformation(current_ef))
 
     # If we have some supplementary natural parameters in the objective 
     # we must subtract them from the natural parameters of the current η
