@@ -131,11 +131,11 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
     # The closure typically has one field holding the ProductOf.
     fn_type = typeof(argument)
     field_names = fieldnames(fn_type)
-    
+
     if !isempty(field_names)
         # Get the first field (usually the captured ProductOf)
         captured = getfield(argument, first(field_names))
-        
+
         # If it's a ProductOf, use it directly
         if captured isa ProductOf
             return (strategy, Logpdf(captured))
@@ -146,7 +146,7 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
             return (strategy, Logpdf(captured))
         end
     end
-    
+
     # Fallback: keep the function as-is
     return (strategy, argument)
 end
