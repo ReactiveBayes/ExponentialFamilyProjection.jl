@@ -66,7 +66,9 @@ function ExponentialFamilyProjection.compute_gradient!(
 end
 
 # Helper to create state
-struct ClosedFormStrategyState{T}
+# Note: We use a mutable struct to ensure each create_state! call 
+# produces a distinct object in memory, even with the same target
+mutable struct ClosedFormStrategyState{T}
     target::T
 end
 
@@ -124,31 +126,31 @@ end
 # Special handling for RxInfer closures that wrap ProductOf
 function ExponentialFamilyProjection.preprocess_strategy_argument(
     strategy::ClosedFormStrategy,
-    argument::Function,
-)
-    # RxInfer wraps ProductOf in a closure. 
-    # Extract the ProductOf from the closure's captured variables.
-    # The closure typically has one field holding the ProductOf.
-    fn_type = typeof(argument)
-    field_names = fieldnames(fn_type)
-
-    if !isempty(field_names)
-        # Get the first field (usually the captured ProductOf)
-        captured = getfield(argument, first(field_names))
-
-        # If it's a ProductOf, use it directly
-        if captured isa ProductOf
-            return (strategy, Logpdf(captured))
-        end
-
-        # If it's a Distribution (e.g. LogNormal inside ProjectionExt closure), use it directly
-        if captured isa Distribution
-            return (strategy, Logpdf(captured))
-        end
+    argument::F,
+) where {F<:Function}
+    # RxInfer wraps ProductOf or Distribution in a closure. 
+    # Extract the ProductOf/Distribution from the closure's captured variables.
+    # The closure typically has one field holding the ProductOf/Distribution.
+    field_names = fieldnames(F)
+    
+    if isempty(field_names)
+        error(
+            """`ClosedFormStrategy` requires a function that captures a `Distribution` or `ProductOf` in its closure.
+            
+            Expected form:
+                let dist = Normal(0, 1)
+                    (x) -> logpdf(dist, x)
+                end
+            
+            Got a function without captured variables: $F
+            
+            If you want to use a plain function, pass the `Distribution` directly instead of wrapping it in a function.
+            """
+        )
     end
-
-    # Fallback: keep the function as-is
-    return (strategy, argument)
+    
+    captured = getfield(argument, first(field_names))
+    return (strategy, Logpdf(captured))
 end
 
 # Generic fallback for non-Function arguments

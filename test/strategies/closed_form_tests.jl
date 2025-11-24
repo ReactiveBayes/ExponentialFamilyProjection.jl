@@ -174,18 +174,18 @@ end
     @test result_arg.dist === prod
 end
 
-@testitem "ClosedFormStrategy argument preprocessing for plain function" begin
+@testitem "ClosedFormStrategy argument preprocessing for plain function should error" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     import ExponentialFamilyProjection: preprocess_strategy_argument
 
     strategy = ClosedFormStrategy()
 
-    # Plain function without extractable Distribution (should return as-is)
+    # Plain function without captured variables should throw an error
+    # because ClosedFormStrategy needs to extract Distribution/ProductOf from closure
     fn = (x) -> x^2
-    result_strat, result_arg = preprocess_strategy_argument(strategy, fn)
-    @test result_strat === strategy
-    @test result_arg === fn
+    
+    @test_throws "`ClosedFormStrategy` requires a function that captures a `Distribution` or `ProductOf` in its closure" preprocess_strategy_argument(strategy, fn)
 end
 
 @testitem "ClosedFormStrategy argument preprocessing for direct Distribution" begin
