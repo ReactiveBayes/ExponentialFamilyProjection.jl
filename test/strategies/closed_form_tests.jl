@@ -300,15 +300,17 @@ end
     target_dist = LogGamma(20.0, 1.0)
     target = Logpdf(target_dist)
 
-    # Create strategy
-    strategy = ClosedFormStrategy()
-
-    # Project
+    # Project with ClosedFormStrategy
     result = project_to(
-        ProjectedTo(NormalMeanVariance),
-        target;
-        strategy = strategy,
-        parameters = ProjectionParameters(niterations = 50, tolerance = 1e-5),
+        ProjectedTo(
+            NormalMeanVariance;
+            parameters = ProjectionParameters(
+                strategy = ClosedFormStrategy(),
+                niterations = 50,
+                tolerance = 1e-5
+            )
+        ),
+        target
     )
 
     @test result isa NormalMeanVariance
@@ -336,14 +338,17 @@ end
     # Initial: Gamma(2.0, 2.0)
     initial_dist = Gamma(2.0, 2.0)
 
-    strategy = ClosedFormStrategy()
-
     result = project_to(
-        ProjectedTo(Gamma),
+        ProjectedTo(
+            Gamma;
+            parameters = ProjectionParameters(
+                strategy = ClosedFormStrategy(),
+                niterations = 50,
+                tolerance = 1e-5
+            )
+        ),
         target;
-        strategy = strategy,
-        initial_point = initial_dist,
-        parameters = ProjectionParameters(niterations = 50, tolerance = 1e-5),
+        initialpoint = initial_dist
     )
 
     @test result isa GammaDistributionsFamily
@@ -353,13 +358,17 @@ end
     @test scale(result) > 0
 
     # Comparison with ControlVariateStrategy
-    cv_strategy = ControlVariateStrategy(nsamples = 500)
     result_cv = project_to(
-        ProjectedTo(Gamma),
+        ProjectedTo(
+            Gamma;
+            parameters = ProjectionParameters(
+                strategy = ControlVariateStrategy(nsamples = 500),
+                niterations = 50,
+                tolerance = 1e-4
+            )
+        ),
         target;
-        strategy = cv_strategy,
-        initial_point = initial_dist,
-        parameters = ProjectionParameters(niterations = 50, tolerance = 1e-4),
+        initialpoint = initial_dist
     )
 
     # Should be close
@@ -375,37 +384,38 @@ end
     using ExponentialFamily
     using StableRNGs
     using LinearAlgebra
+    using BenchmarkTools
 
     # Simple case: Normal to Normal
-    target_dist = Normal(5.0, 2.0)
+    target_dist = NormalMeanVariance(5.0, 2.0)
     target = Logpdf(target_dist)
 
-    initial = Normal(0.0, 1.0)
+    initial = NormalMeanVariance(0.0, 1.0)
 
-    # Analytic
-    t_analytic = @elapsed begin
-        res_analytic = project_to(
-            ProjectedTo(NormalMeanVariance),
-            target;
+    # Create projection objects
+    prj_analytic = ProjectedTo(
+        NormalMeanVariance;
+        parameters = ProjectionParameters(
             strategy = ClosedFormStrategy(),
-            initial_point = initial,
-            parameters = ProjectionParameters(niterations = 100),
+            niterations = 100
         )
-    end
+    )
 
-    # MC
-    t_mc = @elapsed begin
-        res_mc = project_to(
-            ProjectedTo(NormalMeanVariance),
-            target;
+    prj_mc = ProjectedTo(
+        NormalMeanVariance;
+        parameters = ProjectionParameters(
             strategy = ControlVariateStrategy(nsamples = 1000),
-            initial_point = initial,
-            parameters = ProjectionParameters(niterations = 100),
+            niterations = 100
         )
-    end
+    )
 
-    println("ClosedFormStrategy time: $t_analytic")
-    println("ControlVariateStrategy time: $t_mc")
+    # Benchmark with @belapsed for robust timing
+    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint=$initial)
+    t_mc = @belapsed project_to($prj_mc, $target; initialpoint=$initial)
+
+    # Get results for accuracy testing
+    res_analytic = project_to(prj_analytic, target; initialpoint = initial)
+    res_mc = project_to(prj_mc, target; initialpoint = initial)
 
     # Analytic should be more accurate (converge to exact target)
     @test isapprox(mean(res_analytic), mean(target_dist), atol = 2e-2)
@@ -413,6 +423,9 @@ end
 
     # ClosedFormStrategy should be at least as accurate as MC
     @test abs(mean(res_analytic) - 5.0) <= abs(mean(res_mc) - 5.0) + 0.1
+
+    # ClosedFormStrategy should be faster than MC sampling
+    @test t_analytic < t_mc
 end
 
 
