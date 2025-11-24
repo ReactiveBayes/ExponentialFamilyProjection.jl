@@ -101,7 +101,7 @@ end
     end
 end
 
-@testitem "`ClosedFormStrategy` should fail if given a list of samples instead of a function" begin
+@testitem "ClosedFormStrategy should fail if given a list of samples instead of a function" begin
     using ExponentialFamily
     using ClosedFormExpectations
 
