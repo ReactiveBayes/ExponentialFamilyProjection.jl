@@ -154,6 +154,15 @@ end
 # Generic fallback for non-Function arguments
 function ExponentialFamilyProjection.preprocess_strategy_argument(
     strategy::ClosedFormStrategy,
+    argument::Distribution,
+)
+    # ClosedFormStrategy accepts any callable or distribution as argument
+    return (strategy, Logpdf(argument))
+end
+
+# Generic fallback for non-Function arguments
+function ExponentialFamilyProjection.preprocess_strategy_argument(
+    strategy::ClosedFormStrategy,
     argument,
 )
     # ClosedFormStrategy accepts any callable or distribution as argument
