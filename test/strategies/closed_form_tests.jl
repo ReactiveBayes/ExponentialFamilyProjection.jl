@@ -123,56 +123,55 @@ end
     @test_throws Exception project_to(prj, samples)
 end
 
-@testitem "ClosedFormStrategy argument preprocessing for ProductOf" begin
+
+@testitem "ClosedFormStrategy argument preprocessing for Distribution in closure" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
-    using ExponentialFamily
     using Distributions
-    import ExponentialFamily: ProductOf
     import ExponentialFamilyProjection: preprocess_strategy_argument
 
     strategy = ClosedFormStrategy()
-
-    # Case 1: ProductOf wrapped in closure-like struct
     dist1 = Normal(0, 1)
-    dist2 = Normal(1, 1)
-    prod_dist = ProductOf(dist1, dist2)
 
-    # Simulate RxInfer-style closure
-    struct MockClosure{T}
-        captured::T
+    # Test extraction of Distribution from a closure (simulating RxInfer behavior)
+    # The closure captures a Distribution, and preprocess should extract it
+    closure_with_dist = let d = dist1
+        (x) -> logpdf(d, x)
     end
-    (c::MockClosure)(x) = 1.0
 
-    closure = MockClosure(prod_dist)
-
-    # preprocess should extract ProductOf and wrap in Logpdf
-    result_strat, result_arg = preprocess_strategy_argument(strategy, closure)
+    result_strat, result_arg = preprocess_strategy_argument(strategy, closure_with_dist)
     @test result_strat === strategy
+    
+    # The function should extract the captured Distribution and wrap it in Logpdf
     @test result_arg isa Logpdf
-    @test result_arg.distribution === prod_dist
+    @test result_arg.dist === dist1
 end
 
-@testitem "ClosedFormStrategy argument preprocessing for Distribution" begin
+@testitem "ClosedFormStrategy argument preprocessing for ProductOf in closure" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     using Distributions
+    using BayesBase
     import ExponentialFamilyProjection: preprocess_strategy_argument
+    import BayesBase: ProductOf
 
     strategy = ClosedFormStrategy()
-    dist1 = Normal(0, 1)
-
-    # Case 2: Distribution wrapped in closure
-    struct MockClosure{T}
-        captured::T
+    
+    # Test extraction of ProductOf from a closure (RxInfer use case)
+    left = Beta(10, 10)
+    right = Beta(3, 3)
+    prod = ProductOf(left, right)
+    
+    closure_with_product = let p = prod
+        (x) -> logpdf(p, x)
     end
-    (c::MockClosure)(x) = 1.0
 
-    closure_dist = MockClosure(dist1)
-    result_strat, result_arg = preprocess_strategy_argument(strategy, closure_dist)
+    result_strat, result_arg = preprocess_strategy_argument(strategy, closure_with_product)
     @test result_strat === strategy
+    
+    # The function should extract the captured ProductOf and wrap it in Logpdf
     @test result_arg isa Logpdf
-    @test result_arg.distribution === dist1
+    @test result_arg.dist === prod
 end
 
 @testitem "ClosedFormStrategy argument preprocessing for plain function" begin
@@ -182,7 +181,7 @@ end
 
     strategy = ClosedFormStrategy()
 
-    # Case 3: Plain function (should return as-is)
+    # Plain function without extractable Distribution (should return as-is)
     fn = (x) -> x^2
     result_strat, result_arg = preprocess_strategy_argument(strategy, fn)
     @test result_strat === strategy
