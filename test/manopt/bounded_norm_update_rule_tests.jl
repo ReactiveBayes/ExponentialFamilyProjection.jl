@@ -82,9 +82,9 @@
             for limit in (1, 1.0, 1.0f0), p in (zeros(Float64, 3), zeros(Float32, 3))
                 cpa = DefaultManoptProblem(M, ManifoldGradientObjective(f, grad_f))
                 gst = GradientDescentState(M; p = zero(p))
-                @test_opt BoundedNormUpdateRule(limit)(cpa, gst, 1)
-                @test_opt BoundedNormUpdateRule(static(limit))(cpa, gst, 1)
-                @test_opt BoundedNormUpdateRule(
+                @test_opt target_modules=(ExponentialFamilyProjection,) BoundedNormUpdateRule(limit)(cpa, gst, 1)
+                @test_opt target_modules=(ExponentialFamilyProjection,) BoundedNormUpdateRule(static(limit))(cpa, gst, 1)
+                @test_opt target_modules=(ExponentialFamilyProjection,) BoundedNormUpdateRule(
                     static(limit);
                     direction = BoundedNormUpdateRule(limit),
                 )(
