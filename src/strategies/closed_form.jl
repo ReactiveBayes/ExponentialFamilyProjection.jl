@@ -46,7 +46,7 @@ result = project_to(
             niterations = 50
         )
     ),
-    target
+    Logpdf(target)
 )
 ```
 
