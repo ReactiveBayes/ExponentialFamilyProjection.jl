@@ -1,3 +1,5 @@
+export ControlVariateStrategy
+
 using StableRNGs, Bumper, FillArrays
 
 import Random: AbstractRNG

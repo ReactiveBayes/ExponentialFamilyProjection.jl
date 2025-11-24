@@ -433,22 +433,21 @@ using BenchmarkTools
 
 # Target: LogNormal(μ=1.0, σ=0.5)
 target_dist = LogNormal(1.0, 0.5)
-target = (x) -> logpdf(target_dist, x)
 
 # Initial point
 initial_dist = Gamma(2.0, 2.0)
 
-# Project using ClosedFormStrategy
+# Project using ClosedFormStrategy (pass distribution directly)
 t_closed = @elapsed result_closed = project_to(
     ProjectedTo(Gamma; parameters=ProjectionParameters(strategy=ClosedFormStrategy(), niterations=50, tolerance=1e-5)),
-    target;
+    target_dist;
     initialpoint = initial_dist
 )
 
-# Project using ControlVariateStrategy  
+# Project using ControlVariateStrategy (with a function)
 t_cv = @elapsed result_cv = project_to(
     ProjectedTo(Gamma; parameters=ProjectionParameters(strategy=ControlVariateStrategy(nsamples=500), niterations=50, tolerance=1e-5)),
-    target;
+    (x) -> logpdf(target_dist, x);
     initialpoint = initial_dist
 )
 
