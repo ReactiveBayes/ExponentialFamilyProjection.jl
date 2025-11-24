@@ -453,3 +453,40 @@ end
     @test cost > 0  # KL divergence should be positive
     @test all(isfinite.(X_result))
 end
+
+@testitem "ClosedFormStrategy logbasemeasure_correction for ConstantBaseMeasure" begin
+    using ExponentialFamilyProjection
+    using ClosedFormExpectations
+    using ExponentialFamily
+    using Distributions
+    using Test
+
+    # Get the extension module
+    # The extension should be loaded because both ExponentialFamilyProjection and ClosedFormExpectations are loaded
+    ClosedFormExpectationsExt = Base.get_extension(ExponentialFamilyProjection, :ClosedFormExpectationsExt)
+    
+    @test !isnothing(ClosedFormExpectationsExt)
+
+    strategy = ClosedFormStrategy()
+    
+    # Create a mock or usage that triggers ConstantBaseMeasure
+    # We will use reflection/internals to test the specific method
+    
+    # Using a distribution that we know has ConstantBaseMeasure
+    # or constructing it manually if possible.
+    # ExponentialFamily.ConstantBaseMeasure is a singleton struct usually.
+    
+    base_measure = ExponentialFamily.ConstantBaseMeasure()
+    q_dist = Normal(0, 1) # Any distribution works as q_dist is passed through
+    grad_target = [1.0, 2.0]
+    
+    result = ClosedFormExpectationsExt.logbasemeasure_correction(
+        strategy,
+        base_measure,
+        q_dist,
+        grad_target
+    )
+    
+    # The function should return grad_target exactly for ConstantBaseMeasure
+    @test result === grad_target
+end
