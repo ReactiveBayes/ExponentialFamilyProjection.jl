@@ -132,23 +132,23 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
     # Extract the ProductOf/Distribution from the closure's captured variables.
     # The closure typically has one field holding the ProductOf/Distribution.
     field_names = fieldnames(F)
-    
+
     if isempty(field_names)
         error(
             """`ClosedFormStrategy` requires a function that captures a `Distribution` or `ProductOf` in its closure.
-            
+
             Expected form:
                 let dist = Normal(0, 1)
                     (x) -> logpdf(dist, x)
                 end
-            
+
             Got a function without captured variables: $F
-            
+
             If you want to use a plain function, pass the `Distribution` directly instead of wrapping it in a function.
-            """
+            """,
         )
     end
-    
+
     captured = getfield(argument, first(field_names))
     return (strategy, Logpdf(captured))
 end

@@ -4,7 +4,7 @@
     import ExponentialFamilyProjection: get_nsamples
 
     strategy = ClosedFormStrategy()
-    
+
     @test strategy isa ClosedFormStrategy
     @test get_nsamples(strategy) == 0
 end
@@ -19,37 +19,37 @@ end
 
     distributions = [Beta(5, 5), NormalMeanVariance(0, 1), Gamma(2, 2)]
     parameters = ProjectionParameters()
-    
+
     for dist in distributions
         ef = convert(ExponentialFamilyDistribution, dist)
         T = ExponentialFamily.exponential_family_typetag(ef)
         d = size(mean(ef))
         c = getconditioner(ef)
         M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
-        
+
         # Target wrapped in Logpdf
         target = Logpdf(dist)
-        
+
         # Test without supplementary parameters
         state1 = create_state!(ClosedFormStrategy(), M, parameters, target, ef, ())
         state2 = create_state!(ClosedFormStrategy(), M, parameters, target, ef, ())
-        
+
         @test state1.target === target
         @test state2.target === target
         @test state1 !== state2  # Different objects in memory
-        
+
         # Test with supplementary parameters
         state3 = create_state!(ClosedFormStrategy(), M, parameters, target, ef, (ef,))
         state4 = create_state!(ClosedFormStrategy(), M, parameters, target, ef, (ef,))
-        
+
         @test state3.target === target
         @test state4.target === target
         @test state3 !== state4
-        
+
         # Test with multiple supplementary parameters
         state5 = create_state!(ClosedFormStrategy(), M, parameters, target, ef, (ef, ef))
         state6 = create_state!(ClosedFormStrategy(), M, parameters, target, ef, (ef, ef))
-        
+
         @test state5.target === target
         @test state6.target === target
         @test state5 !== state6
@@ -64,11 +64,7 @@ end
     using Distributions
     import ExponentialFamilyProjection: create_state!, prepare_state!, ProjectionParameters
 
-    distributions = [
-        NormalMeanVariance(0, 1),
-        Gamma(2, 2),
-        Beta(3, 3),
-    ]
+    distributions = [NormalMeanVariance(0, 1), Gamma(2, 2), Beta(3, 3)]
 
     for dist in distributions
         target_dist = dist
@@ -82,21 +78,22 @@ end
 
         strategy = ClosedFormStrategy()
         parameters = ProjectionParameters()
-        
+
         # Create initial state
         state1 = create_state!(strategy, M, parameters, target, ef, ())
-        
+
         # prepare_state! should return the same state object
         state2 = prepare_state!(strategy, state1, M, parameters, target, ef, ())
-        
+
         @test state1 === state2
         @test state1.target === state2.target
-        
+
         # Test with supplementary parameters
         supplementary_η = (getnaturalparameters(ef),)
         state3 = create_state!(strategy, M, parameters, target, ef, supplementary_η)
-        state4 = prepare_state!(strategy, state3, M, parameters, target, ef, supplementary_η)
-        
+        state4 =
+            prepare_state!(strategy, state3, M, parameters, target, ef, supplementary_η)
+
         @test state3 === state4
     end
 end
@@ -107,18 +104,16 @@ end
 
     prj = ProjectedTo(
         Beta;
-        parameters = ProjectionParameters(
-            strategy = ClosedFormStrategy(),
-        ),
+        parameters = ProjectionParameters(strategy = ClosedFormStrategy()),
     )
 
     # ClosedFormStrategy doesn't explicitly reject arrays, but it won't work properly
     # The extension's preprocess_strategy_argument will keep the array as-is
     # and then the compute_gradient! will fail when trying to use it
     # This is the expected behavior - it will error during execution
-    
+
     samples = [0.5, 0.6, 0.7]
-    
+
     # This should fail during the projection, not during preprocessing
     @test_throws Exception project_to(prj, samples)
 end
@@ -141,7 +136,7 @@ end
 
     result_strat, result_arg = preprocess_strategy_argument(strategy, closure_with_dist)
     @test result_strat === strategy
-    
+
     # The function should extract the captured Distribution and wrap it in Logpdf
     @test result_arg isa Logpdf
     @test result_arg.dist === dist1
@@ -156,19 +151,19 @@ end
     import BayesBase: ProductOf
 
     strategy = ClosedFormStrategy()
-    
+
     # Test extraction of ProductOf from a closure (RxInfer use case)
     left = Beta(10, 10)
     right = Beta(3, 3)
     prod = ProductOf(left, right)
-    
+
     closure_with_product = let p = prod
         (x) -> logpdf(p, x)
     end
 
     result_strat, result_arg = preprocess_strategy_argument(strategy, closure_with_product)
     @test result_strat === strategy
-    
+
     # The function should extract the captured ProductOf and wrap it in Logpdf
     @test result_arg isa Logpdf
     @test result_arg.dist === prod
@@ -184,8 +179,11 @@ end
     # Plain function without captured variables should throw an error
     # because ClosedFormStrategy needs to extract Distribution/ProductOf from closure
     fn = (x) -> x^2
-    
-    @test_throws "`ClosedFormStrategy` requires a function that captures a `Distribution` or `ProductOf` in its closure" preprocess_strategy_argument(strategy, fn)
+
+    @test_throws "`ClosedFormStrategy` requires a function that captures a `Distribution` or `ProductOf` in its closure" preprocess_strategy_argument(
+        strategy,
+        fn,
+    )
 end
 
 @testitem "ClosedFormStrategy argument preprocessing for direct Distribution" begin
@@ -254,7 +252,8 @@ end
     using ExponentialFamilyManifolds
     using LinearAlgebra
     using StableRNGs
-    import ExponentialFamilyProjection: compute_gradient!, create_state!, ProjectionParameters
+    import ExponentialFamilyProjection:
+        compute_gradient!, create_state!, ProjectionParameters
 
     strategy = ClosedFormStrategy()
 
@@ -283,7 +282,7 @@ end
     @test X_result === X
     @test length(X) == length(η)
     @test all(isfinite.(X))
-    
+
     # The gradient should point towards the target
     # Since target is at μ=2, gradient should push η in that direction
 end
@@ -442,19 +441,12 @@ end
     parameters = ProjectionParameters(rng = StableRNG(42))
     state = create_state!(strategy, M, parameters, target, ef, ())
 
-    obj = ProjectionCostGradientObjective(
-        parameters,
-        target,
-        copy(η),
-        (),
-        strategy,
-        state,
-    )
+    obj = ProjectionCostGradientObjective(parameters, target, copy(η), (), strategy, state)
 
     # Test evaluation
     p = ExponentialFamilyManifolds.partition_point(M, η)
     X = Manifolds.zero_vector(M, p)
-    
+
     cost, X_result = obj(M, X, p)
 
     @test isfinite(cost)
