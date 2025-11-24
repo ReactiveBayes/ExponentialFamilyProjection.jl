@@ -41,6 +41,7 @@ The optimization procedure requires computing the expectation of the gradient to
 ```@docs
 ExponentialFamilyProjection.DefaultStrategy
 ExponentialFamilyProjection.ControlVariateStrategy
+ExponentialFamilyProjection.ClosedFormStrategy
 ExponentialFamilyProjection.MLEStrategy
 ExponentialFamilyProjection.BonnetStrategy
 ExponentialFamilyProjection.GaussNewton
@@ -411,6 +412,75 @@ round.((speedup, t_manual, t_enzyme); digits = 3)
 ```
 
 On typical runs we observe a substantial speedup (often around 10×) for Enzyme while maintaining the same result.
+
+### Closed-form strategy (zero-variance gradients)
+
+The `ClosedFormStrategy` uses `ClosedFormExpectations.jl` to compute exact, analytic gradients without Monte Carlo sampling. This provides "zero-variance" gradients, leading to faster and more accurate convergence compared to sampling-based strategies.
+
+!!! note
+    To use `ClosedFormStrategy`, you must install and load `ClosedFormExpectations.jl`:
+    ```julia
+    using Pkg
+    Pkg.add("ClosedFormExpectations")
+    using ClosedFormExpectations
+    ```
+
+Let's compare `ClosedFormStrategy` with `ControlVariateStrategy` by projecting a LogNormal distribution onto a Gamma distribution:
+
+```@example projection
+using ClosedFormExpectations
+using BenchmarkTools
+
+# Target: LogNormal(μ=1.0, σ=0.5)
+target_dist = LogNormal(1.0, 0.5)
+
+# Initial point
+initial_dist = Gamma(2.0, 2.0)
+
+# Project using ClosedFormStrategy (pass distribution directly)
+t_closed = @elapsed result_closed = project_to(
+    ProjectedTo(Gamma; parameters=ProjectionParameters(strategy=ClosedFormStrategy(), niterations=50, tolerance=1e-5)),
+    target_dist;
+    initialpoint = initial_dist
+)
+
+# Project using ControlVariateStrategy (with a function)
+t_cv = @elapsed result_cv = project_to(
+    ProjectedTo(Gamma; parameters=ProjectionParameters(strategy=ControlVariateStrategy(nsamples=500), niterations=50, tolerance=1e-5)),
+    (x) -> logpdf(target_dist, x);
+    initialpoint = initial_dist
+)
+
+println("ClosedFormStrategy time: $(round(t_closed * 1000, digits=2)) ms")
+println("ControlVariateStrategy time: $(round(t_cv * 1000, digits=2)) ms")
+println("Speedup: $(round(t_cv / t_closed, digits=2))x")
+```
+
+Now let's visualize the results to see how both strategies compare:
+
+```@example projection
+using Plots
+
+xs = 0.01:0.01:10.0
+
+plot(xs, x -> pdf(target_dist, x), 
+     label="Target (LogNormal)", linewidth=2, 
+     fill=0, fillalpha=0.2, color=:blue)
+plot!(xs, x -> pdf(result_closed, x), 
+      label="ClosedForm", linewidth=2, 
+      linestyle=:dash, color=:red)
+plot!(xs, x -> pdf(result_cv, x), 
+      label="ControlVariate", linewidth=2, 
+      linestyle=:dot, color=:green)
+xlabel!("x")
+ylabel!("Density")
+title!("LogNormal → Gamma Projection Comparison")
+```
+
+The `ClosedFormStrategy` typically provides:
+- **Faster convergence**: No Monte Carlo noise in gradients
+- **Better accuracy**: Exact gradient computations
+- **Speed advantages**: Especially significant for lower-dimensional problems
 
 ### Projection with samples
 

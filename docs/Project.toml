@@ -1,6 +1,7 @@
 [deps]
 BayesBase = "b4ee3484-f114-42fe-b91c-797d54a0c67e"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+ClosedFormExpectations = "70ff922c-62d4-418d-abfc-e284e489b734"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"

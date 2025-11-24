@@ -3,7 +3,7 @@ using Documenter, ExponentialFamilyProjection
 DocMeta.setdocmeta!(
     ExponentialFamilyProjection,
     :DocTestSetup,
-    :(using ExponentialFamilyProjection);
+    :(using ExponentialFamilyProjection, ClosedFormExpectations);
     recursive = true,
 )
 
