@@ -34,6 +34,7 @@ BayesBase = "1.5.0"
 Bumper = "0.6"
 ClosedFormExpectations = "0.3.0"
 Distributions = "0.25"
+DomainSets = "0.7.16"
 ExponentialFamily = "2.0.0"
 ExponentialFamilyManifolds = "3.0.3"
 FastCholesky = "1.3"
@@ -55,6 +56,7 @@ julia = "1.10"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ClosedFormExpectations = "70ff922c-62d4-418d-abfc-e284e489b734"
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Hwloc = "0e44f5e4-bd66-52a0-8798-143a42290a1d"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
@@ -67,4 +69,4 @@ StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Aqua", "BenchmarkTools", "ClosedFormExpectations", "Hwloc", "Plots", "Printf", "ForwardDiff", "Manifolds", "ReTestItems", "RollingFunctions", "JET", "StableRNGs"]
+test = ["Test", "Aqua", "BenchmarkTools", "ClosedFormExpectations", "DomainSets", "Hwloc", "Plots", "Printf", "ForwardDiff", "Manifolds", "ReTestItems", "RollingFunctions", "JET", "StableRNGs"]
