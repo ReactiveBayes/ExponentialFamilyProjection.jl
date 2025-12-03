@@ -321,3 +321,39 @@ end
         end
     end
 end
+
+@testitem "Test default GaussNewton strategy given ContinuousUni-/Multi-variateLogPdf" begin
+    using ExponentialFamily, BayesBase
+    import ExponentialFamilyProjection:
+        GaussNewton,
+        getstrategy,
+        preprocess_strategy_argument,
+        get_default_InplaceLogpdfGradHess
+    import ExponentialFamily:
+        NormalMeanVariance,
+        MvNormalMeanCovariance
+    import BayesBase: ContinuousUnivariateLogPdf, ContinuousMultivariateLogPdf
+    import LinearAlgebra: Diagonal
+    import DomainSets: ℝ3
+
+    # univariate case
+    a1 = NormalMeanVariance(-10,0.1)
+    my_logpdf(x) = logpdf(a1, x)
+    my_uni_continuous_logpdf = ContinuousUnivariateLogPdf(my_logpdf)
+    inplace = get_default_InplaceLogpdfGradHess(my_uni_continuous_logpdf)
+    params = ProjectionParameters(niterations=2000, strategy = GaussNewton())
+    prj = ProjectedTo(NormalMeanVariance; parameters = params)
+
+    @test project_to(prj, my_uni_continuous_logpdf) ≈ project_to(prj, inplace) atol=1e-6
+
+    # multivariate case
+    a2 = MvNormalMeanCovariance([1.3, -5, 30.0], Diagonal([0.5, 2.0, 1.0]))
+    my_logpdf(x) = logpdf(a2, x)
+    my_mv_continuous_logpdf = ContinuousMultivariateLogPdf(ℝ3, my_logpdf)
+    inplace = get_default_InplaceLogpdfGradHess(my_mv_continuous_logpdf)
+    params = ProjectionParameters(niterations=2000, strategy = GaussNewton())
+    prj = ProjectedTo(MvNormalMeanCovariance, 3; parameters = params)
+
+    @test project_to(prj, my_mv_continuous_logpdf) ≈ project_to(prj, inplace) atol=1e-6
+
+end
