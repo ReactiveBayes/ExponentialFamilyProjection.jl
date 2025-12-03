@@ -340,20 +340,29 @@ end
     a1 = NormalMeanVariance(-10,0.1)
     my_logpdf(x) = logpdf(a1, x)
     my_uni_continuous_logpdf = ContinuousUnivariateLogPdf(my_logpdf)
-    inplace = get_default_InplaceLogpdfGradHess(my_uni_continuous_logpdf)
+    default_uni_inplace = get_default_InplaceLogpdfGradHess(my_uni_continuous_logpdf)
     params = ProjectionParameters(niterations=2000, strategy = GaussNewton())
     prj = ProjectedTo(NormalMeanVariance; parameters = params)
 
-    @test project_to(prj, my_uni_continuous_logpdf) ≈ project_to(prj, inplace) atol=1e-6
+    test_uni_cont_proj = project_to(prj, my_uni_continuous_logpdf)
+    test_uni_inplace_proj = project_to(prj, default_uni_inplace)
+    @test test_uni_cont_proj ≈ test_uni_inplace_proj atol=1e-6
+    @test test_uni_cont_proj isa NormalMeanVariance
+    @test mean(test_uni_cont_proj) ≈ mean(a1) atol=1e-6
+    @test var(test_uni_cont_proj) ≈ var(a1) atol=1e-6
 
     # multivariate case
     a2 = MvNormalMeanCovariance([1.3, -5, 30.0], Diagonal([0.5, 2.0, 1.0]))
     my_logpdf(x) = logpdf(a2, x)
     my_mv_continuous_logpdf = ContinuousMultivariateLogPdf(ℝ3, my_logpdf)
-    inplace = get_default_InplaceLogpdfGradHess(my_mv_continuous_logpdf)
+    default_mv_inplace = get_default_InplaceLogpdfGradHess(my_mv_continuous_logpdf)
     params = ProjectionParameters(niterations=2000, strategy = GaussNewton())
     prj = ProjectedTo(MvNormalMeanCovariance, 3; parameters = params)
 
-    @test project_to(prj, my_mv_continuous_logpdf) ≈ project_to(prj, inplace) atol=1e-6
-
+    test_mv_cont_proj = project_to(prj, my_mv_continuous_logpdf)
+    test_mv_inplace_proj = project_to(prj, default_mv_inplace)
+    @test test_mv_cont_proj ≈ test_mv_inplace_proj atol=1e-6
+    @test test_mv_cont_proj isa MvNormalMeanCovariance
+    @test mean(test_mv_cont_proj) ≈ mean(a2) atol=1e-5
+    @test cov(test_mv_cont_proj) ≈ cov(a2) atol=1e-6
 end
