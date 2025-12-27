@@ -23,8 +23,30 @@ end
 
 get_nsamples(strategy::BonnetStrategy) = strategy.nsamples
 
+# Generic fallback for any argument that can be converted to InplaceLogpdfGradHess
 preprocess_strategy_argument(strategy::BonnetStrategy{S,TL}, argument::Any) where {S,TL} =
     (strategy, convert(TL, argument))
+
+# Special handling for ContinuousUnivariateLogPdf and ContinuousMultivariateLogPdf
+# when DifferentiationInterface extension is loaded
+function preprocess_strategy_argument(
+    strategy::BonnetStrategy,
+    argument::Union{
+        BayesBase.ContinuousUnivariateLogPdf,
+        BayesBase.ContinuousMultivariateLogPdf,
+    },
+)
+    # This will use to_inplace_gradhess from DifferentiationInterfaceExt if available
+    # Otherwise, it will fall back to the generic convert method
+    if hasmethod(to_inplace_gradhess, (typeof(argument),))
+        return (strategy, to_inplace_gradhess(argument))
+    else
+        error(
+            lazy"To use `$(typeof(argument))` with `BonnetStrategy`, please load DifferentiationInterface.jl: `using DifferentiationInterface`",
+        )
+    end
+end
+
 preprocess_strategy_argument(::BonnetStrategy, argument::AbstractArray) = error(
     lazy"The `BonnetStrategy` requires the projection argument to be a callable object (e.g. `Function`) or an `InplaceLogpdfGradHess`. Got `$(typeof(argument))` instead.",
 )

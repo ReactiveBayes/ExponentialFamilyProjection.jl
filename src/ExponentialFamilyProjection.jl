@@ -36,6 +36,39 @@ Checks the compatibility of `strategy` with `argument` and returns a modified st
 function preprocess_strategy_argument end
 
 """
+    to_inplace_gradhess(argument, backend = AutoForwardDiff())
+
+Converts a continuous log-pdf object to an `InplaceLogpdfGradHess` using automatic differentiation.
+
+This function is implemented in the DifferentiationInterface extension and requires loading
+DifferentiationInterface.jl to use.
+
+# Arguments
+- `argument`: A `ContinuousUnivariateLogPdf` or `ContinuousMultivariateLogPdf` object
+- `backend`: An AD backend from ADTypes.jl (default: `AutoForwardDiff()`)
+
+# Returns
+- `InplaceLogpdfGradHess`: An object with optimized gradient and Hessian computations
+
+# Example
+```julia
+using DifferentiationInterface
+using ExponentialFamily, BayesBase
+
+my_logpdf(x) = logpdf(Normal(0, 1), x)
+my_continuous_logpdf = ContinuousUnivariateLogPdf(my_logpdf)
+
+# Convert with default backend
+inplace = to_inplace_gradhess(my_continuous_logpdf)
+
+# Or specify a different backend
+using Zygote
+inplace = to_inplace_gradhess(my_continuous_logpdf, AutoZygote())
+```
+"""
+function to_inplace_gradhess end
+
+"""
     create_state!(
         strategy,
         M::AbstractManifold,
