@@ -197,6 +197,26 @@ end
     @test result_arg.dist === prod
 end
 
+@testitem "ClosedFormStrategy argument preprocessing for direct ProductOf" begin
+    using ExponentialFamilyProjection
+    using ClosedFormExpectations
+    using Distributions
+    using BayesBase
+    import ExponentialFamilyProjection: preprocess_strategy_argument
+    import BayesBase: ProductOf
+
+    strategy = ClosedFormStrategy()
+
+    left = Beta(10, 10)
+    right = Gamma(3, 2)
+    prod = ProductOf(left, right)
+
+    result_strat, result_arg = preprocess_strategy_argument(strategy, prod)
+    @test result_strat === strategy
+    @test result_arg isa Logpdf
+    @test result_arg.dist === prod
+end
+
 @testitem "ClosedFormStrategy argument preprocessing for plain function should error" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
