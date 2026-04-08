@@ -12,7 +12,7 @@
         @test test_projection_convergence(distribution)
     end
 
-    @testset let distribution = Binomial(2, 0.9) 
+    @testset let distribution = Binomial(2, 0.9)
         @test test_projection_convergence(distribution)
     end
 
@@ -35,7 +35,11 @@ end
     end
 
     @testset let distribution = Poisson(5.3)
-        @test_throws AssertionError test_projection_convergence(distribution, to = Binomial, conditioner = -20)
+        @test_throws AssertionError test_projection_convergence(
+            distribution,
+            to = Binomial,
+            conditioner = -20,
+        )
     end
 end
 
@@ -52,7 +56,11 @@ end
     end
 
     @testset let distribution = Bernoulli(0.6)
-        @test_throws AssertionError test_projection_convergence(distribution, to = Binomial, conditioner = -1)
+        @test_throws AssertionError test_projection_convergence(
+            distribution,
+            to = Binomial,
+            conditioner = -1,
+        )
     end
 
     @testset let distribution = Bernoulli(0.3)
@@ -82,7 +90,7 @@ end
         @test test_projection_mle(distribution)
     end
 
-    @testset let distribution = Binomial(2, 0.9) 
+    @testset let distribution = Binomial(2, 0.9)
         @test test_projection_mle(distribution)
     end
 

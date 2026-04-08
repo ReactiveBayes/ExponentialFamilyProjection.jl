@@ -25,6 +25,9 @@ include("manopt/bounded_norm_update_rule.jl")
 include("manopt/projection_objective.jl")
 include("projected_to.jl")
 
+### jacobian from natural to manifold
+include("jacobians.jl")
+
 """
     preprocess_strategy_argument(strategy, argument)
 
@@ -120,7 +123,11 @@ function compute_gradient! end
 include("strategies/control_variate.jl")
 include("strategies/mle.jl")
 include("strategies/default.jl")
-
-
+include("strategies/closed_form.jl")
+# Bonnet strategy
+include("strategies/bonnet/naive_grad_hess.jl")
+include("strategies/bonnet/bonnet_logpdf.jl")
+include("strategies/bonnet/strategy.jl")
+include("strategies/bonnet/gauss_newton.jl")
 
 end

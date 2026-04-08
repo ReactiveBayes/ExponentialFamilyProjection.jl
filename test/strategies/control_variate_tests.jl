@@ -78,6 +78,7 @@ end
         ExponentialFamily,
         Distributions,
         BayesBase,
+        ForwardDiff,
         LinearAlgebra,
         StableRNGs,
         ExponentialFamilyManifolds
@@ -130,7 +131,8 @@ end
                 parameters = ProjectionParameters(rng = rng)
                 strategy = ControlVariateStrategy(nsamples = nsamples)
 
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) create_state!(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) create_state!(
                     strategy,
                     M,
                     parameters,
@@ -139,31 +141,36 @@ end
                     supplementary_η,
                 )
 
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) ExponentialFamilyProjection.prepare_samples_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_samples_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) ExponentialFamilyProjection.prepare_logpdfs_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_logpdfs_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) ExponentialFamilyProjection.prepare_logbasemeasures_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_logbasemeasures_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) ExponentialFamilyProjection.prepare_sufficientstatistics_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_sufficientstatistics_container(
                     rng,
                     ef,
                     nsamples,
                     supplementary_η,
                 )
-                @test_opt ignored_modules = (Base, LinearAlgebra, Distributions) ExponentialFamilyProjection.prepare_gradsamples_container(
+                @test_opt ignored_modules =
+                    (Base, LinearAlgebra, Distributions, ForwardDiff) ExponentialFamilyProjection.prepare_gradsamples_container(
                     rng,
                     ef,
                     nsamples,
@@ -416,7 +423,7 @@ end
 end
 
 @testitem "Projection result should not depend on the usage of buffer" begin
-    using ExponentialFamily, BayesBase, Bumper, StaticTools
+    using ExponentialFamily, BayesBase, Bumper
     distributions = [
         Beta(10, 10),
         Gamma(10, 10),
@@ -431,7 +438,7 @@ end
     for distribution in distributions
         parameters_with_buffer = ProjectionParameters(
             strategy = ExponentialFamilyProjection.ControlVariateStrategy(
-                buffer = StaticTools.MallocSlabBuffer(),
+                buffer = Bumper.SlabBuffer(),
             ),
         )
         parameters_without_buffer = ProjectionParameters(

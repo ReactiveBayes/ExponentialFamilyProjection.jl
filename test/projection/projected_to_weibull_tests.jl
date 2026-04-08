@@ -25,35 +25,23 @@ end
     include("./projected_to_setuptests.jl")
 
     @testset let distribution = Exponential(0.1)
-        @test test_projection_convergence(
-            distribution,
-            to = Weibull,
-            conditioner = 1.0
-        )
+        @test test_projection_convergence(distribution, to = Weibull, conditioner = 1.0)
     end
 
     @testset let distribution = Exponential(0.1)
         @test_throws AssertionError test_projection_convergence(
             distribution,
             to = Weibull,
-            conditioner = -1.0
+            conditioner = -1.0,
         )
     end
 
     @testset let distribution = Exponential(10.1)
-        @test test_projection_convergence(
-            distribution,
-            to = Weibull,
-            conditioner = 1.0
-        )
+        @test test_projection_convergence(distribution, to = Weibull, conditioner = 1.0)
     end
 
     @testset let distribution = Exponential(100.32)
-        @test test_projection_convergence(
-            distribution,
-            to = Weibull,
-            conditioner = 1.0
-        )
+        @test test_projection_convergence(distribution, to = Weibull, conditioner = 1.0)
     end
 end
 
@@ -64,35 +52,23 @@ end
     include("./projected_to_setuptests.jl")
 
     @testset let distribution = Rayleigh(0.1)
-        @test test_projection_convergence(
-            distribution,
-            to = Weibull,
-            conditioner = 2.0
-        )
+        @test test_projection_convergence(distribution, to = Weibull, conditioner = 2.0)
     end
 
     @testset let distribution = Rayleigh(0.1)
         @test_throws AssertionError test_projection_convergence(
             distribution,
             to = Weibull,
-            conditioner = -2.0
+            conditioner = -2.0,
         )
     end
 
     @testset let distribution = Rayleigh(10.1)
-        @test test_projection_convergence(
-            distribution,
-            to = Weibull,
-            conditioner = 2.0
-        )
+        @test test_projection_convergence(distribution, to = Weibull, conditioner = 2.0)
     end
 
     @testset let distribution = Rayleigh(100.32)
-        @test test_projection_convergence(
-            distribution,
-            to = Weibull,
-            conditioner = 2.0
-        )
+        @test test_projection_convergence(distribution, to = Weibull, conditioner = 2.0)
     end
 end
 

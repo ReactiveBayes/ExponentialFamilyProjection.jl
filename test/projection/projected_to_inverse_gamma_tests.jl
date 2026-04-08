@@ -13,7 +13,7 @@
     end
 
     @testset let distribution = InverseGamma(1, 0.5)
-        @test test_projection_convergence(distribution, nsamples_range=100:200:2000)
+        @test test_projection_convergence(distribution, nsamples_range = 100:200:2000)
     end
 end
 

@@ -11,3 +11,4 @@ profile.pb.gz
 
 *.ipynb
 .ipynb_checkpoints
+*Manifest.toml

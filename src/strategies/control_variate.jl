@@ -1,4 +1,6 @@
-using StableRNGs, LoopVectorization, Bumper, FillArrays, StaticTools
+export ControlVariateStrategy
+
+using StableRNGs, Bumper, FillArrays
 
 import Random: AbstractRNG
 import BayesBase: InplaceLogpdf
@@ -10,15 +12,15 @@ A strategy for gradient descent optimization and gradients computations that res
 
 The following parameters are available:
 * `nsamples = 2000`: The number of samples to use for estimates
-* `buffer = StaticTools.MallocSlabBuffer()`: Advanced option; A buffer for temporary computations
+* `buffer = Bumper.SlabBuffer()`: Advanced option; A buffer for temporary computations
 
 !!! note
     This strategy requires a function as an argument for `project_to` and cannot project a collection of samples. Use `MLEStrategy` to project a collection of samples.
 """
-Base.@kwdef struct ControlVariateStrategy{S, B, TL}
+Base.@kwdef struct ControlVariateStrategy{S,B,TL}
     nsamples::S = 2000
-    buffer::B = StaticTools.MallocSlabBuffer()
-    base_logpdf_type::Type{TL}  = InplaceLogpdf
+    buffer::B = Bumper.SlabBuffer()
+    base_logpdf_type::Type{TL} = InplaceLogpdf
 end
 
 get_nsamples(strategy::ControlVariateStrategy) = strategy.nsamples
@@ -28,8 +30,10 @@ function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
     return get_nsamples(a) == get_nsamples(b) && get_buffer(a) == get_buffer(b)
 end
 
-preprocess_strategy_argument(strategy::ControlVariateStrategy{S,B,TL}, argument::Any) where {S,B,TL} =
-    (strategy, convert(TL, argument))
+preprocess_strategy_argument(
+    strategy::ControlVariateStrategy{S,B,TL},
+    argument::Any,
+) where {S,B,TL} = (strategy, convert(TL, argument))
 preprocess_strategy_argument(::ControlVariateStrategy, argument::AbstractArray) = error(
     lazy"The `ControlVariateStrategy` requires the projection argument to be a callable object (e.g. `Function`). Got `$(typeof(argument))` instead.",
 )
@@ -184,7 +188,7 @@ function prepare_state!(
         )
 
         @inbounds logpdf = state.logpdfs[i]
-        @turbo warn_check_args = false for j = 1:J
+        for j = 1:J
             @inbounds state.sufficientstatistics[j, i] = sufficientstatistics[j]
             @inbounds state.gradsamples[j, i] =
                 (-state.logbasemeasures[i] + logpdf) *
