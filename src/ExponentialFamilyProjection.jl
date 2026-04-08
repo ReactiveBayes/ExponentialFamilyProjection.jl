@@ -1,5 +1,7 @@
 module ExponentialFamilyProjection
 
+using ForwardDiff
+
 using ExponentialFamily,
     ExponentialFamilyManifolds,
     BayesBase,

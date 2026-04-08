@@ -17,8 +17,43 @@ end
 
 get_nsamples(strategy::GaussNewton) = strategy.nsamples
 
-preprocess_strategy_argument(strategy::GaussNewton{S,TL}, argument::Any) where {S,TL} =
-    (strategy, convert(TL, argument))
+get_default_InplaceLogpdfGradHess(argument::ContinuousUnivariateLogPdf) = begin
+        function __logpdf!(out, x)
+            out[1] = argument.logpdf(x)
+            return out
+        end
+        function __grad_hess!(out_grad, out_hess, x)
+            # Note that for univariate, the gradient is the derivative 
+            # and the Hessian is the second derivative
+            out_grad .= ForwardDiff.derivative(argument.logpdf, x)
+            out_hess .= ForwardDiff.derivative(x -> ForwardDiff.derivative(argument.logpdf, x), x)
+            return out_grad, out_hess
+        end
+        default_inplace = InplaceLogpdfGradHess(__logpdf!, __grad_hess!)
+        return default_inplace
+end
+
+get_default_InplaceLogpdfGradHess(argument::ContinuousMultivariateLogPdf) = begin
+        function __logpdf!(out, x)
+            out[1] = argument.logpdf(x)
+            return out
+        end
+        function __grad_hess!(out_grad, out_hess, x)
+            out_grad .= ForwardDiff.gradient(argument.logpdf, x)
+            out_hess .= ForwardDiff.hessian(argument.logpdf, x)
+            return out_grad, out_hess
+        end
+        default_inplace = InplaceLogpdfGradHess(__logpdf!, __grad_hess!)
+        return default_inplace
+end
+
+preprocess_strategy_argument(strategy::GaussNewton{S,TL}, argument::Any) where {S,TL} = begin
+    if argument isa Union{ContinuousUnivariateLogPdf, ContinuousMultivariateLogPdf}
+        return (strategy, get_default_InplaceLogpdfGradHess(argument))
+    else
+        (strategy, convert(TL, argument))
+    end
+end
 preprocess_strategy_argument(::GaussNewton, argument::AbstractArray) = error(
     lazy"The `GaussNewton` strategy requires the projection argument to be a callable object (e.g. `Function`) or an `InplaceLogpdfGradHess`. Got `$(typeof(argument))` instead.",
 )
