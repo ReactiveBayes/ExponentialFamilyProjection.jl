@@ -482,6 +482,56 @@ The `ClosedFormStrategy` typically provides:
 - **Better accuracy**: Exact gradient computations
 - **Speed advantages**: Especially significant for lower-dimensional problems
 
+### Autograd-backed closed-form strategy (Enzyme.jl)
+
+When `ClosedFormExpectations.jl` provides `ClosedFormExpectation` (i.e. ``\mathbb{E}_q[f]``) for a target–variational pair but does **not** yet have a hand-coded `ClosedWilliamsProduct` (i.e. ``\mathbb{E}_q[f \nabla_\eta \log q]``), you can still use `ClosedFormStrategy` by passing an `EnzymeBackend`. This exploits the identity
+
+```math
+\nabla_\eta \mathbb{E}_q[f(x)] = \mathbb{E}_q[f(x) \nabla_\eta \log q(x;\eta)]
+```
+
+and lets Enzyme.jl compute the gradient automatically by differentiating the closed-form expectation with respect to the natural parameters.
+
+#### Example: Gamma projected to LogNormal
+
+For this pair the `ClosedFormExpectation` is available but there is no hand-coded `ClosedWilliamsProduct`, so the default `ClosedFormStrategy()` would fail. With `EnzymeBackend` it works out of the box:
+
+```@example enzymebackend
+using ExponentialFamilyProjection, ClosedFormExpectations, Enzyme
+using ExponentialFamily, BayesBase, Distributions
+using Plots
+
+target_dist = Gamma(3.0, 2.0)
+
+result = project_to(
+    ProjectedTo(
+        LogNormal;
+        parameters = ProjectionParameters(
+            strategy = ClosedFormStrategy(EnzymeBackend()),
+            niterations = 100,
+            tolerance = 1e-6,
+        ),
+    ),
+    target_dist,
+)
+
+xs = 0.01:0.05:20.0
+
+plot(xs, x -> pdf(target_dist, x),
+     label="Target (Gamma)", linewidth=2,
+     fill=0, fillalpha=0.2, color=:blue)
+plot!(xs, x -> pdf(result, x),
+      label="Projection (LogNormal)", linewidth=2,
+      linestyle=:dash, color=:red)
+xlabel!("x")
+ylabel!("Density")
+title!("Gamma → LogNormal (EnzymeBackend)")
+```
+
+The `EnzymeBackend` supports both reverse and forward mode:
+- `ClosedFormStrategy(EnzymeBackend())` — reverse mode (default)
+- `ClosedFormStrategy(EnzymeBackend(EnzymeForward()))` — forward mode
+
 ### Projection with samples
 
 The projection can be done given a set of samples instead of the function directly. For example, let's project an set of samples onto a Beta distribution:

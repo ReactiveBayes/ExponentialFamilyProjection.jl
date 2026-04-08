@@ -51,7 +51,7 @@ function ExponentialFamilyProjection.compute_gradient!(
     )
 
     # Compute ∇_η E[log p̃ * (T - μ)]
-    grad_target = mean(ClosedWilliamsProduct(), target_fn, q_dist)
+    grad_target = mean(ClosedWilliamsProduct(strategy.backend), target_fn, q_dist)
     grad_eta = logbasemeasure_correction(
         strategy,
         ExponentialFamily.isbasemeasureconstant(q_dist),
@@ -153,12 +153,19 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
     return (strategy, Logpdf(captured))
 end
 
-# Generic fallback for non-Function arguments
+# Wrap Distribution in Logpdf for ClosedFormStrategy
 function ExponentialFamilyProjection.preprocess_strategy_argument(
     strategy::ClosedFormStrategy,
     argument::Distribution,
 )
-    # ClosedFormStrategy accepts any callable or distribution as argument
+    return (strategy, Logpdf(argument))
+end
+
+# Wrap ProductOf in Logpdf for ClosedFormStrategy
+function ExponentialFamilyProjection.preprocess_strategy_argument(
+    strategy::ClosedFormStrategy,
+    argument::ProductOf,
+)
     return (strategy, Logpdf(argument))
 end
 
@@ -167,7 +174,6 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
     strategy::ClosedFormStrategy,
     argument,
 )
-    # ClosedFormStrategy accepts any callable or distribution as argument
     return (strategy, argument)
 end
 
