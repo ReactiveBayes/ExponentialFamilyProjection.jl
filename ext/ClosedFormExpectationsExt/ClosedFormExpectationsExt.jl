@@ -150,6 +150,14 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
     end
 
     captured = getfield(argument, first(field_names))
+    if !(captured isa Union{Distribution,ProductOf})
+        error(
+            "`ClosedFormStrategy` expected the first captured variable of the closure to be a " *
+            "`Distribution` or `ProductOf`, but got `$(typeof(captured))`. `ClosedFormStrategy` " *
+            "supports closures that capture a single distribution. Pass the `Distribution`/" *
+            "`ProductOf` directly to `project_to` to avoid ambiguity.",
+        )
+    end
     return (strategy, Logpdf(captured))
 end
 
