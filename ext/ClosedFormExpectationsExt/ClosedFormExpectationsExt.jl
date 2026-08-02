@@ -52,9 +52,22 @@ function ExponentialFamilyProjection.compute_gradient!(
 
     # Compute ∇_η E[log p̃ * (T - μ)]
     grad_target = mean(ClosedWilliamsProduct(strategy.backend), target_fn, q_dist)
+    # The analytic base-measure correction is only implemented for a constant base measure
+    # (there E[T] = μ makes the -E_q[log h_q (T - μ)] term vanish). For a non-constant base
+    # measure the term is non-zero and is not implemented, so fail clearly rather than
+    # producing an opaque MethodError or silently dropping the term.
+    base_measure_type = ExponentialFamily.isbasemeasureconstant(q_dist)
+    if base_measure_type === ExponentialFamily.NonConstantBaseMeasure()
+        error(
+            "`ClosedFormStrategy` currently supports only variational families with a constant " *
+            "base measure, but got `$(base_measure_type)` for the variational family. The " *
+            "-E_q[log h_q (T - μ)] base-measure correction is not implemented for non-constant " *
+            "base measures. Use `ControlVariateStrategy` instead.",
+        )
+    end
     grad_eta = logbasemeasure_correction(
         strategy,
-        ExponentialFamily.isbasemeasureconstant(q_dist),
+        base_measure_type,
         q_dist,
         grad_target,
     )
