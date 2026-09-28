@@ -52,6 +52,14 @@ ExponentialFamilyProjection.compute_cost
 ExponentialFamilyProjection.compute_gradient!
 ```
 
+### Categorical specialization
+
+For `Categorical` distributions, `ControlVariateStrategy` and `MLEStrategy` apply the inverse Fisher information analytically, without constructing or inverting a Fisher matrix. The calculation uses the first `K-1` natural coordinates, with the last category as the fixed reference. The internal helper is documented below:
+
+```@docs
+ExponentialFamilyProjection.categorical_inv_fisher_mul!
+```
+
 ## In-place logpdf/grad/Hessian adapters
 
 The library provides convenient wrappers to evaluate log-density, gradient, and Hessian in-place, and an adapter to combine separate `grad!`/`hess!` into a single `grad_hess!`.
