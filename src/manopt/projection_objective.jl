@@ -31,6 +31,10 @@ get_supplementary_η(obj::ProjectionCostGradientObjective) = obj.supplementary_�
 get_strategy(obj::ProjectionCostGradientObjective) = obj.strategy
 get_strategy_state(obj::ProjectionCostGradientObjective) = obj.strategy_state
 
+# Strategies with an analytic Fisher inverse action can skip constructing the matrix.
+prepare_inv_fisher(::AbstractManifold, strategy, current_ef) =
+    cholinv(ExponentialFamily.fisherinformation(current_ef))
+
 function call_objective(
     objective::ProjectionCostGradientObjective,
     M::AbstractManifold,
@@ -58,7 +62,7 @@ function call_objective(
 
     logpartition = ExponentialFamily.logpartition(current_ef)
     gradlogpartition = ExponentialFamily.gradlogpartition(current_ef)
-    inv_fisher = cholinv(ExponentialFamily.fisherinformation(current_ef))
+    inv_fisher = prepare_inv_fisher(M, strategy, current_ef)
 
     # If we have some supplementary natural parameters in the objective 
     # we must subtract them from the natural parameters of the current η
