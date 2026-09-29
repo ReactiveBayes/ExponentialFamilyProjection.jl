@@ -35,6 +35,16 @@ function create_state!(
 )
     _, sample_container = ExponentialFamily.check_logpdf(initial_ef, samples)
 
+    if length(sample_container) == 0
+        error("`MLEStrategy` requires at least one sample, but the provided sample array is empty.")
+    end
+    _allfinite(x::Real) = isfinite(x)
+    _allfinite(x::AbstractArray) = all(_allfinite, x)
+    _allfinite(::Any) = true # unknown containers are not rejected
+    if !_allfinite(sample_container)
+        error("`MLEStrategy` received non-finite (NaN/Inf) values in the sample array.")
+    end
+
     sufficientstatistics = zeros(
         paramfloattype(initial_ef),
         length(getnaturalparameters(initial_ef)),
