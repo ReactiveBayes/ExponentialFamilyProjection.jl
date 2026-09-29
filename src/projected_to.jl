@@ -296,6 +296,14 @@ function project_to(
         return copy(getnaturalparameters(supplementary_ef))
     end
 
+    try
+        projection_argument.logpdf!([0.0], randn(prj.dims))
+    catch e
+        error(
+            "The supplied projection dimensions `$(prj.dims)` may be invalid for the provided logpdf! function. Check dimensions and logpdf! function.\n",
+        )
+    end
+
     strategy, projection_argument = preprocess_strategy_argument(
         getstrategy(projection_parameters),
         projection_argument,
