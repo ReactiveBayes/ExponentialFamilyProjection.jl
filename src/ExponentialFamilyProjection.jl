@@ -122,6 +122,7 @@ function compute_gradient! end
 
 include("strategies/control_variate.jl")
 include("strategies/mle.jl")
+include("strategies/specialization/categorical.jl")
 include("strategies/default.jl")
 include("strategies/closed_form.jl")
 # Bonnet strategy
