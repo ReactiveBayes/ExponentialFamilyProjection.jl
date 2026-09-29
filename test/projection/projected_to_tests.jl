@@ -604,10 +604,10 @@ end
         (3,),
         nothing,
     )
-    initialpoint = rand(manifold)
+    initialpoint = rand(StableRNG(42), manifold)
 
     update_rules =
-        [Nesterov(), MomentumGradient(momentum = 0.9), Manopt.IdentityUpdateRule()]
+        [Nesterov(), MomentumGradient(momentum = 0.5), Manopt.IdentityUpdateRule()]
     for update_rule in update_rules
         direction = ExponentialFamilyProjection.BoundedNormUpdateRule(
             1000.0;
