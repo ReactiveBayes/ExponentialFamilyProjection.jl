@@ -42,6 +42,10 @@ jobs:
 
             - name: Load this and run the downstream tests
               shell: julia --project=downstream {0}
+              env:
+                  # `Pkg.develop` promotes ExponentialFamilyProjection from a weakdep to a hard dep
+                  # of the downstream package, which makes Aqua report it as a stale dependency
+                  RUN_AQUA: "false"
               run: |
                   using Pkg
                   try
