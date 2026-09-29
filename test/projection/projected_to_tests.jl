@@ -604,10 +604,14 @@ end
         (3,),
         nothing,
     )
-    initialpoint = rand(manifold)
+    initialpoint = rand(StableRNG(42), manifold)
+
+    # Manopt 0.6 stopped applying the step size twice in `MomentumGradient` (before, new
+    # gradients were scaled by `step^2`), so the momentum that converges here depends on the version
+    momentum = pkgversion(Manopt) >= v"0.6" ? 0.5 : 0.9
 
     update_rules =
-        [Nesterov(), MomentumGradient(momentum = 0.9), Manopt.IdentityUpdateRule()]
+        [Nesterov(), MomentumGradient(momentum = momentum), Manopt.IdentityUpdateRule()]
     for update_rule in update_rules
         direction = ExponentialFamilyProjection.BoundedNormUpdateRule(
             1000.0;
