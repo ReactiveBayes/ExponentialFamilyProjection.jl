@@ -288,7 +288,7 @@ function project_to(
             )
         end
         supplementary_ef = convert(ExponentialFamilyDistribution, s)
-        if getconditioner(supplementary_ef) !== get_projected_to_conditioner(prj)
+        if getconditioner(supplementary_ef) != get_projected_to_conditioner(prj)
             error(
                 lazy"Supplementary distributions must have the same conditioner as the projection target `$(get_projected_to_type(prj))` with `conditioner = $(get_projected_to_conditioner(prj))`, got `$(ExponentialFamily.exponential_family_typetag(s))` with `conditioner = $(getconditioner(supplementary_ef))`",
             )
