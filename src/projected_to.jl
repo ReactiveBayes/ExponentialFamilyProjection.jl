@@ -297,6 +297,7 @@ function project_to(
     end
 
     strategy, projection_argument = preprocess_strategy_argument(
+        M,
         getstrategy(projection_parameters),
         projection_argument,
     )
