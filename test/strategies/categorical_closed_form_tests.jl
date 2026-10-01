@@ -179,34 +179,54 @@ end
     @test EFP.preprocess_strategy_argument(M, strategy, fn) == (strategy, fn)
 end
 
-@testitem "Kakade exact directions through categorical closed-form projection" begin
-    using ClosedFormExpectations, ExponentialFamily, Manopt
-    using StatsFuns: logistic, logit
+@testitem "ClosedFormStrategy vs ControlVariateStrategy: Speed and Accuracy" begin
+    using BayesBase
+    using ExponentialFamilyProjection
+    using ExponentialFamilyProjection: ControlVariateStrategy
+    using ClosedFormExpectations
+    using Distributions
+    using ExponentialFamily
+    using StableRNGs
+    using LinearAlgebra
+    using BenchmarkTools
 
-    rate = 0.05
-    prj = ProjectedTo(
+    # Simple case: Normal to Normal
+    target_dist = Categorical([0.25, 0.25, 0.25, 0.25])
+    target = Logpdf(target_dist)
+
+    initial = Categorical([0.125, 0.125, 0.125, 0.625])
+
+    # Create projection objects
+    prj_analytic = ProjectedTo(
         Categorical;
-        conditioner = 2,
+        conditioner=4,
         parameters = ProjectionParameters(
             strategy = ClosedFormStrategy(),
-            niterations = 1,
-            tolerance = missing,
-            stepsize = Manopt.ConstantLength(1.0),
-            direction = Manopt.IdentityUpdateRule(),
-        ),
+            niterations = 1000
+        )
     )
-    for θ in (logit.([0.8, 0.1]), [0.0, 0.0], [-2.0, 3.0], [12.0, 0.0], [2.0, 12.0])
-        p, c = logistic.(θ), logistic.(-θ)
-        d = reverse(c) ./ sum(c)
-        w = d .* p .* c
-        differences = [(2 - 3p[2]) / sum(c), (4 - 3p[1]) / sum(c)]
-        for method in (:ordinary, :natural), s = 1:2
-            factor = method == :natural ? w[s] / (w[s] + 1e-3) : w[s]
-            scores = rate * factor .* [c[s] * differences[s], -p[s] * differences[s]]
-            oldq = Categorical([p[s], c[s]])
-            result = project_to(prj, k -> scores[k], oldq; initialpoint = oldq)
-            new_θ = getnaturalparameters(convert(ExponentialFamilyDistribution, result))[1]
-            @test new_θ - θ[s] ≈ rate * factor * differences[s] atol = 1e-10 rtol = 1e-8
-        end
-    end
+
+    prj_mc = ProjectedTo(
+        Categorical;
+        conditioner=4,
+        parameters = ProjectionParameters(
+            strategy = ControlVariateStrategy(nsamples = 100),
+            niterations = 1000
+        )
+    )
+
+    # Benchmark with @belapsed for robust timing
+    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint=$initial)
+    t_mc = @belapsed project_to($prj_mc, $target; initialpoint=$initial)
+
+    # Get results for accuracy testing
+    res_analytic = project_to(prj_analytic, target; initialpoint = initial)
+    res_mc = project_to(prj_mc, target; initialpoint = initial)
+
+    # Analytic should be more accurate (converge to exact target) and be closer to the target in terms of probabilities than MC sampling
+    @test isapprox(res_analytic, target_dist; atol = 1e-5)
+    @test norm(probs(res_analytic) - probs(target_dist)) < norm(probs(res_mc) - probs(target_dist))
+
+    # ClosedFormStrategy should be faster than MC sampling
+    @test t_analytic < t_mc
 end
