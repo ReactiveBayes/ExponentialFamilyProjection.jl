@@ -30,10 +30,15 @@ include("jacobians.jl")
 
 """
     preprocess_strategy_argument(strategy, argument)
+    preprocess_strategy_argument(M, strategy, argument)
 
 Checks the compatibility of `strategy` with `argument` and returns a modified strategy and argument if needed.
+The manifold-aware overload defaults to the two-argument method and allows family-specific preprocessing.
 """
 function preprocess_strategy_argument end
+
+preprocess_strategy_argument(::AbstractManifold, strategy, argument) =
+    preprocess_strategy_argument(strategy, argument)
 
 """
     create_state!(
