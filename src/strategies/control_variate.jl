@@ -27,7 +27,9 @@ get_nsamples(strategy::ControlVariateStrategy) = strategy.nsamples
 get_buffer(strategy::ControlVariateStrategy) = strategy.buffer
 
 function Base.:(==)(a::ControlVariateStrategy, b::ControlVariateStrategy)::Bool
-    return get_nsamples(a) == get_nsamples(b) && get_buffer(a) == get_buffer(b)
+    return get_nsamples(a) == get_nsamples(b) &&
+           get_buffer(a) == get_buffer(b) &&
+           a.base_logpdf_type == b.base_logpdf_type
 end
 
 preprocess_strategy_argument(
