@@ -177,4 +177,6 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
     return (strategy, argument)
 end
 
+include("categorical.jl")
+
 end

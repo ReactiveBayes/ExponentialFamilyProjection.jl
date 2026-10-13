@@ -27,6 +27,13 @@ using ClosedFormExpectations
 Loading `ClosedFormExpectations` will trigger a package extension that implements
 the gradient computation for this strategy.
 
+For `Categorical`, a version of `ClosedFormExpectations.jl` with categorical expectation
+and Williams-product support is required. Expectations are exact sums over all categories,
+and EFP applies the analytic inverse Fisher in the first `K-1` coordinates, keeping the
+reference coordinate fixed at zero. Callable log-scores, including plain functions and
+closures, are supported in addition to distribution targets. This costs O(K) target
+evaluations per expectation; `ControlVariateStrategy` remains the default sampled alternative.
+
 # When to Use
 
 Use `ClosedFormStrategy` when:
