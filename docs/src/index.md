@@ -42,6 +42,7 @@ The optimization procedure requires computing the expectation of the gradient to
 ExponentialFamilyProjection.DefaultStrategy
 ExponentialFamilyProjection.ControlVariateStrategy
 ExponentialFamilyProjection.ClosedFormStrategy
+ExponentialFamilyProjection.ExpectationStrategy
 ExponentialFamilyProjection.MLEStrategy
 ExponentialFamilyProjection.BonnetStrategy
 ExponentialFamilyProjection.GaussNewton
@@ -420,6 +421,23 @@ round.((speedup, t_manual, t_enzyme); digits = 3)
 ```
 
 On typical runs we observe a substantial speedup (often around 10×) for Enzyme while maintaining the same result.
+
+### Quadrature strategy (deterministic, any backend)
+
+The `ExpectationStrategy` computes the projection's expectations with any backend of BayesBase's
+expectation protocol, such as the quadrature rules of ExpectationApproximations.jl: Gauss–Hermite
+for Gaussians, Gauss–Laguerre for Gamma and Gauss–Jacobi for Beta distributions. The gradient has
+no variance, so the iterations can stop at a tight tolerance, and the same target always gives
+the same projection:
+
+```julia
+using ExpectationApproximations
+
+# Beta(2, 3) times 7 successes in 20 trials: the projection is Beta(9, 16)
+logp(p) = logpdf(Beta(2.0, 3.0), p) + 7 * log(p) + 13 * log1p(-p)
+strategy = ExpectationStrategy(ExpectationApproximations.EADefault())
+project_to(ProjectedTo(Beta; parameters = ProjectionParameters(strategy = strategy, niterations = 1000, tolerance = 1e-10)), logp)
+```
 
 ### Closed-form strategy (zero-variance gradients)
 
