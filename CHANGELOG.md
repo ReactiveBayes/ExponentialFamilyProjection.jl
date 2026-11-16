@@ -23,6 +23,9 @@ The changes below are to be released as 3.5.0.
 
 ### Changed
 
+- `ClosedFormExpectations` 0.5 in compat, the release on BayesBase's expectation protocol; the
+  `ClosedFormStrategy` extension is unchanged and passes its tests on it.
+
 - BayesBase 1.7 is required, for its expectation protocol.
 
 [Unreleased]: https://github.com/ReactiveBayes/ExponentialFamilyProjection.jl/compare/v3.4.0...HEAD
