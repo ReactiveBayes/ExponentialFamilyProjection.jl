@@ -3,22 +3,23 @@ export ExpectationStrategy
 """
     ExpectationStrategy(backend)
 
-A deterministic strategy: the expectations of the projection are a quadrature from `backend`, a
-backend of BayesBase's expectation protocol, such as ExpectationApproximations' `EADefault()`.
-At every iteration the backend gives a point set for the current member of the family, weighted
-points `xᵢ, wᵢ`, and
+A deterministic projection strategy that computes the expectations of the projection with
+`backend`, a backend of BayesBase's expectation protocol, such as ExpectationApproximations'
+`EADefault()`. At every iteration the backend returns a point set for the current member of the
+family, the points `xᵢ` with weights `wᵢ`. From these:
 
 - the gradient is `Σᵢ wᵢ (log p̃(xᵢ) - log h(xᵢ)) (T(xᵢ) - ∇A(η))`, the covariance of the
-  sufficient statistics with the target's log-density, whose natural gradient, through the
-  inverse of the Fisher information, gives the step;
+  sufficient statistics with the target's log-density. The step is its natural gradient, which
+  uses the inverse of the Fisher information;
 - the cost is the negative evidence lower bound, `-Σᵢ wᵢ log p̃(xᵢ) - H[q]`.
 
-It needs no random numbers: the same target gives the same projection, and the gradient has no
-variance, so the iterations can stop at a tight tolerance. The points depend only on the current
-member, never on the target, so the quadrature must suit the family: Gauss–Hermite for Gaussians,
-Gauss–Laguerre for Gamma, Gauss–Jacobi for Beta, as ExpectationApproximations chooses.
+The strategy draws no samples, so the gradient has no variance and the iterations can stop at a
+tight tolerance. The points depend on the current member of the family and not on the target, so
+the backend's quadrature must suit the family. ExpectationApproximations, for example, uses
+Gauss–Hermite quadrature for Gaussians, Gauss–Laguerre for Gamma and Gauss–Jacobi for Beta
+distributions.
 
-The argument of `project_to` must be callable, the unnormalised log-density.
+The argument of `project_to` must be callable: it is the unnormalised log-density of the target.
 """
 struct ExpectationStrategy{B}
     backend::B

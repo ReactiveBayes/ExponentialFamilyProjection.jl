@@ -424,11 +424,12 @@ On typical runs we observe a substantial speedup (often around 10×) for Enzyme 
 
 ### Quadrature strategy (deterministic, any backend)
 
-The `ExpectationStrategy` computes the projection's expectations with any backend of BayesBase's
-expectation protocol, such as the quadrature rules of ExpectationApproximations.jl: Gauss–Hermite
-for Gaussians, Gauss–Laguerre for Gamma and Gauss–Jacobi for Beta distributions. The gradient has
-no variance, so the iterations can stop at a tight tolerance, and the same target always gives
-the same projection:
+The `ExpectationStrategy` computes the expectations of the projection with a backend of
+BayesBase's expectation protocol. For example, ExpectationApproximations.jl uses Gauss–Hermite
+quadrature for Gaussians, Gauss–Laguerre for Gamma and Gauss–Jacobi for Beta distributions. The
+strategy draws no samples, so the gradient has no variance and the iterations can stop at a
+tight tolerance. Here the target is the posterior of a `Beta(2, 3)` prior after 7 successes in
+20 trials, which is `Beta(9, 16)`:
 
 ```julia
 using ExpectationApproximations

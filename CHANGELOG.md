@@ -11,21 +11,20 @@ The changes below are to be released as 3.5.0.
 
 ### Added
 
-- `ExpectationStrategy(backend)`, a deterministic projection strategy. The projection's
-  expectations are a quadrature from `backend`, any backend of BayesBase's expectation protocol,
-  such as ExpectationApproximations' `EADefault()`, instead of samples. At every iteration the
-  backend gives a point set for the current member of the family; the gradient is the score form
-  `Σᵢ wᵢ (log p̃(xᵢ) - log h(xᵢ)) (T(xᵢ) - ∇A(η))`, the step goes through the inverse Fisher
-  information, and the cost is the negative evidence lower bound. Without random numbers the
-  gradient has no variance, so the iterations can stop at a tight tolerance: on a Beta–Bernoulli
-  target whose exact posterior is `Beta(9, 16)`, it returns that Beta, where the default sampled
-  strategy gives about `Beta(8.0, 14.3)`. The argument of `project_to` must be callable.
+- `ExpectationStrategy(backend)`, a deterministic projection strategy. It computes the
+  expectations of the projection with `backend`, a backend of BayesBase's expectation protocol
+  such as ExpectationApproximations' `EADefault()`, instead of sampling. At every iteration the
+  backend gives a point set for the current member of the family. The gradient is the score form
+  `Σᵢ wᵢ (log p̃(xᵢ) - log h(xᵢ)) (T(xᵢ) - ∇A(η))`, the step uses the inverse Fisher
+  information, and the cost is the negative evidence lower bound. The gradient has no variance,
+  so the iterations can stop at a tight tolerance. On a Beta–Bernoulli target whose exact
+  posterior is `Beta(9, 16)`, the strategy returns that Beta, and the default sampled strategy
+  gives about `Beta(8.0, 14.3)`. The argument of `project_to` must be callable.
 
 ### Changed
 
-- `ClosedFormExpectations` 0.5 in compat, the release on BayesBase's expectation protocol; the
-  `ClosedFormStrategy` extension is unchanged and passes its tests on it.
-
-- BayesBase 1.7 is required, for its expectation protocol.
+- Compat admits `ClosedFormExpectations` 0.5, the release built on BayesBase's expectation
+  protocol. The `ClosedFormStrategy` extension is unchanged and passes its tests with it.
+- Requires BayesBase 1.7, which defines the expectation protocol.
 
 [Unreleased]: https://github.com/ReactiveBayes/ExponentialFamilyProjection.jl/compare/v3.4.0...HEAD
