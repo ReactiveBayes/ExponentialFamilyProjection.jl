@@ -3,36 +3,35 @@ export ClosedFormStrategy
 """
     ClosedFormStrategy{B} <: ExponentialFamilyProjection.AbstractStrategy
 
-A projection strategy that uses `ClosedFormExpectations.jl` to compute the exact gradient
-of the cross-entropy term \$\\mathbb{E}_{q_\\eta}[\\log \\tilde{p}(x)]\$ analytically.
+A projection strategy that computes the gradient of the cross-entropy term
+\$\\mathbb{E}_{q_\\eta}[\\log \\tilde{p}(x)]\$ in closed form, with `ClosedFormExpectations.jl`.
+The gradient has no Monte Carlo variance, unlike the gradient of `ControlVariateStrategy`.
 
-This strategy provides a "Zero-Variance" gradient estimator, avoiding the noise associated
-with Monte Carlo sampling (like in `ControlVariateStrategy`).
-
-The optional `backend` field selects the differentiation backend used for computing
-`ClosedWilliamsProduct`. When `backend = nothing` (the default), hand-coded closed-form
-implementations are used. When an `EnzymeBackend` is provided, Enzyme.jl automatically
-differentiates the `ClosedFormExpectation` to obtain the Williams product gradient, enabling
-the strategy to work for any target-variational pair where the expectation is implemented
-but the Williams product is not.
+The gradient is `BayesBase.expectation_gradient(ClosedFormExpectation(backend), f, q)`, the gradient
+of the expectation with respect to the natural parameters of `q`. With `backend = nothing`, the
+default, it uses the gradients that `ClosedFormExpectations.jl` implements by hand. With an
+`EnzymeBackend`, Enzyme.jl differentiates the closed-form expectation instead, so the strategy also
+works for pairs whose expectation has a closed form but whose gradient is not implemented.
 
 # Requirements
 
-To use this strategy, you **must** load the `ClosedFormExpectations` package:
+The strategy needs `ClosedFormExpectations.jl` 1.0 or later:
 
 ```julia
 using ClosedFormExpectations
 ```
 
-Loading `ClosedFormExpectations` will trigger a package extension that implements
-the gradient computation for this strategy.
+Loading `ClosedFormExpectations` triggers a package extension that implements the gradient
+computation for this strategy.
 
-For `Categorical`, a version of `ClosedFormExpectations.jl` with categorical expectation
-and Williams-product support is required. Expectations are exact sums over all categories,
-and EFP applies the analytic inverse Fisher in the first `K-1` coordinates, keeping the
-reference coordinate fixed at zero. Callable log-scores, including plain functions and
-closures, are supported in addition to distribution targets. This costs O(K) target
-evaluations per expectation; `ControlVariateStrategy` remains the default sampled alternative.
+The target is a distribution, its log-density `Base.Fix1(logpdf, p)`, or a closure that captures a
+distribution or a `ProductOf`, as RxInfer passes it.
+
+For `Categorical`, expectations are exact sums over all categories, and EFP applies the analytic
+inverse Fisher in the first `K-1` coordinates, keeping the reference coordinate fixed at zero.
+Callable log-scores, including plain functions and closures, are supported in addition to
+distribution targets. This costs O(K) target evaluations per expectation; `ControlVariateStrategy`
+remains the default sampled alternative.
 
 # When to Use
 
@@ -42,9 +41,9 @@ Use `ClosedFormStrategy` when:
 - You want faster convergence with fewer iterations
 - Reproducibility is critical (no random sampling)
 
-Use `ClosedFormStrategy(EnzymeBackend())` when:
-- A `ClosedFormExpectation` is implemented for the pair, but `ClosedWilliamsProduct` is not
-- You want to exploit the identity \$\\nabla_\\eta \\mathbb{E}_q[f] = \\mathbb{E}_q[f \\nabla_\\eta \\log q]\$ via autodiff
+Use `ClosedFormStrategy(EnzymeBackend())` when the expectation has a closed form for the pair but
+its gradient is not implemented. Enzyme then differentiates the expectation, using
+\$\\nabla_\\eta \\mathbb{E}_q[f] = \\mathbb{E}_q[f \\nabla_\\eta \\log q]\$.
 
 # Examples
 
@@ -55,7 +54,7 @@ using Distributions
 # Target distribution
 target = LogNormal(1.0, 0.5)
 
-# Project to Gamma using closed-form gradients (hand-coded Williams product)
+# Project to Gamma with the hand-written closed-form gradients
 result = project_to(
     ProjectedTo(
         Gamma;
@@ -64,7 +63,7 @@ result = project_to(
             niterations = 50
         )
     ),
-    Logpdf(target)
+    Base.Fix1(logpdf, target)
 )
 ```
 
@@ -72,8 +71,8 @@ result = project_to(
 using ExponentialFamilyProjection, ClosedFormExpectations, Enzyme
 using Distributions
 
-# Target distribution (Gamma → LogNormal: ClosedFormExpectation is available
-# but ClosedWilliamsProduct is not, so we use EnzymeBackend to autodiff it)
+# Gamma → LogNormal: the expectation has a closed form but its gradient is not implemented,
+# so Enzyme differentiates the expectation
 target = Gamma(2.0, 1.0)
 
 result = project_to(
@@ -84,7 +83,7 @@ result = project_to(
             niterations = 50
         )
     ),
-    Logpdf(target)
+    Base.Fix1(logpdf, target)
 )
 ```
 
@@ -93,10 +92,10 @@ result = project_to(
 This estimator was proposed in [Lukashchuk et al., 2024](https://proceedings.mlr.press/v246/lukashchuk24a.html).
 
 !!! note
-    Without a backend, this strategy requires that `ClosedFormExpectations.jl` implements
-    `ClosedWilliamsProduct` for the specific target-variational pair. With an `EnzymeBackend`,
-    it suffices to have `ClosedFormExpectation` implemented. See the `ClosedFormExpectations.jl`
-    documentation for supported combinations.
+    Without a backend, the strategy needs a closed-form gradient for the pair,
+    `BayesBase.supports_expectation_gradient(ClosedFormExpectation(), f, q)`. With an
+    `EnzymeBackend`, a closed-form expectation is enough. See the `ClosedFormExpectations.jl`
+    documentation for the supported pairs.
 """
 struct ClosedFormStrategy{B}
     backend::B

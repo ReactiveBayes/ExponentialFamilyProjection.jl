@@ -17,7 +17,7 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
             ),
         )
     elseif argument isa Union{Distribution,ProductOf}
-        return (strategy, Logpdf(argument))
+        return (strategy, Base.Fix1(logpdf, argument))
     end
     # Unlike other families, finite categorical expectations support arbitrary
     # scalar callables. Do not reinterpret a closure's captures as distributions.
@@ -71,7 +71,8 @@ function ExponentialFamilyProjection.compute_cost(
     gradlogpartition,
     inv_fisher,
 ) where {F}
-    expected_target = mean(ClosedFormExpectation(), state.target, state.current_ef)
+    expected_target =
+        BayesBase.expectation(ClosedFormExpectation(), state.target, state.current_ef)
     # Categorical base measures are one. Fixed supplementary normalization
     # constants are omitted, as in ControlVariateStrategy's objective.
     return dot(gradlogpartition, η) - logpartition - expected_target
@@ -87,7 +88,11 @@ function ExponentialFamilyProjection.compute_gradient!(
     gradlogpartition,
     inv_fisher,
 ) where {F}
-    gradient = mean(ClosedWilliamsProduct(strategy.backend), state.target, state.current_ef)
+    gradient = BayesBase.expectation_gradient(
+        ClosedFormExpectation(strategy.backend),
+        state.target,
+        state.current_ef,
+    )
     n = length(gradlogpartition) - 1
     natural_gradient = similar(gradient, n)
     ExponentialFamilyProjection.categorical_inv_fisher_mul!(

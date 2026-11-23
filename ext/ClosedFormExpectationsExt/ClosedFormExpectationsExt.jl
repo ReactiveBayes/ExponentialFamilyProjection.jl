@@ -9,9 +9,10 @@ using ManifoldsBase
 using LinearAlgebra
 using Distributions
 
+import BayesBase
+
 # Import types needed for RxInfer closure unwrapping
 import ExponentialFamily: ProductOf
-import ClosedFormExpectations: Logpdf
 
 ExponentialFamilyProjection.get_nsamples(::ClosedFormStrategy) = 0
 
@@ -50,8 +51,12 @@ function ExponentialFamilyProjection.compute_gradient!(
         ExponentialFamilyManifolds.partition_point(M, η),
     )
 
-    # Compute ∇_η E[log p̃ * (T - μ)]
-    grad_target = mean(ClosedWilliamsProduct(strategy.backend), target_fn, q_dist)
+    # Compute ∇_η E[log p̃ * (T - μ)], the gradient of E_q[log p̃] in the natural parameters
+    grad_target = BayesBase.expectation_gradient(
+        ClosedFormExpectation(strategy.backend),
+        target_fn,
+        q_dist,
+    )
     grad_eta = logbasemeasure_correction(
         strategy,
         ExponentialFamily.isbasemeasureconstant(q_dist),
@@ -116,7 +121,7 @@ function ExponentialFamilyProjection.compute_cost(
     dist_std = convert(Distribution, q_dist)
 
     # E_q[log p] via CFE
-    E_log_p = mean(ClosedFormExpectation(), state.target, dist_std)
+    E_log_p = BayesBase.expectation(ClosedFormExpectation(), state.target, dist_std)
 
     # E_q[log q] = -entropy(q)
     return -entropy(dist_std) - E_log_p
@@ -150,23 +155,31 @@ function ExponentialFamilyProjection.preprocess_strategy_argument(
     end
 
     captured = getfield(argument, first(field_names))
-    return (strategy, Logpdf(captured))
+    return (strategy, Base.Fix1(logpdf, captured))
 end
 
-# Wrap Distribution in Logpdf for ClosedFormStrategy
+# The log-density of a distribution, as ClosedFormExpectations takes it, is already in its form
+function ExponentialFamilyProjection.preprocess_strategy_argument(
+    strategy::ClosedFormStrategy,
+    argument::Base.Fix1{typeof(logpdf)},
+)
+    return (strategy, argument)
+end
+
+# Wrap a Distribution in its log-density for ClosedFormStrategy
 function ExponentialFamilyProjection.preprocess_strategy_argument(
     strategy::ClosedFormStrategy,
     argument::Distribution,
 )
-    return (strategy, Logpdf(argument))
+    return (strategy, Base.Fix1(logpdf, argument))
 end
 
-# Wrap ProductOf in Logpdf for ClosedFormStrategy
+# Wrap ProductOf in its log-density for ClosedFormStrategy
 function ExponentialFamilyProjection.preprocess_strategy_argument(
     strategy::ClosedFormStrategy,
     argument::ProductOf,
 )
-    return (strategy, Logpdf(argument))
+    return (strategy, Base.Fix1(logpdf, argument))
 end
 
 # Generic fallback for non-Function arguments

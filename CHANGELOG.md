@@ -23,8 +23,13 @@ The changes below are to be released as 3.5.0.
 
 ### Changed
 
-- Compat admits `ClosedFormExpectations` 0.5, the release built on BayesBase's expectation
-  protocol. The `ClosedFormStrategy` extension is unchanged and passes its tests with it.
+- **Breaking for the `ClosedFormStrategy` extension:** it requires `ClosedFormExpectations` 1.0,
+  which computes through BayesBase's expectation protocol. The extension computes the cost with
+  `BayesBase.expectation(ClosedFormExpectation(), f, q)` and the gradient with
+  `BayesBase.expectation_gradient(ClosedFormExpectation(backend), f, q)`. A target can be a
+  distribution, its log-density `Base.Fix1(logpdf, p)` or a closure capturing a distribution;
+  ClosedFormExpectations' `Logpdf` wrapper no longer exists. With ClosedFormExpectations 0.4,
+  the extension of 3.4 applies.
 - Requires BayesBase 1.7, which defines the expectation protocol.
 
 [Unreleased]: https://github.com/ReactiveBayes/ExponentialFamilyProjection.jl/compare/v3.4.0...HEAD

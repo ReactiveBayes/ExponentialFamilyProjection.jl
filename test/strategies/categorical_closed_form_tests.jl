@@ -103,7 +103,7 @@ end
 @testitem "Categorical closed-form public projection" begin
     using ClosedFormExpectations, ExponentialFamily, ExponentialFamilyManifolds, Manopt
     using BayesBase: ProductOf
-    using Distributions: probs
+    using Distributions: probs, logpdf
     using StatsFuns: softmax
     import ExponentialFamilyProjection as EFP
 
@@ -134,7 +134,7 @@ end
         expected = softmax(scores)
         target = Categorical(expected)
         for argument in
-            (target, Logpdf(target), k -> scores[k], CategoryLogScore(scores), identity)
+            (target, Base.Fix1(logpdf, target), k -> scores[k], CategoryLogScore(scores), identity)
             wanted = argument === identity ? softmax(collect(1.0:K)) : expected
             result = project_to(projection(K), argument; initialpoint = oldq)
             @test probs(result) ≈ wanted atol = 1e-10
@@ -192,7 +192,7 @@ end
 
     # Simple case: Normal to Normal
     target_dist = Categorical([0.25, 0.25, 0.25, 0.25])
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     initial = Categorical([0.125, 0.125, 0.125, 0.625])
 

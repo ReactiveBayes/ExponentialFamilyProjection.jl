@@ -511,7 +511,7 @@ The `ClosedFormStrategy` typically provides:
 
 ### Autograd-backed closed-form strategy (Enzyme.jl)
 
-When `ClosedFormExpectations.jl` provides `ClosedFormExpectation` (i.e. ``\mathbb{E}_q[f]``) for a target–variational pair but does **not** yet have a hand-coded `ClosedWilliamsProduct` (i.e. ``\mathbb{E}_q[f \nabla_\eta \log q]``), you can still use `ClosedFormStrategy` by passing an `EnzymeBackend`. This exploits the identity
+When `ClosedFormExpectations.jl` has a closed form for the expectation ``\mathbb{E}_q[f]`` of a target–variational pair, `BayesBase.expectation(ClosedFormExpectation(), f, q)`, but not for its gradient ``\mathbb{E}_q[f \nabla_\eta \log q]``, `BayesBase.expectation_gradient(ClosedFormExpectation(), f, q)`, you can still use `ClosedFormStrategy` by passing an `EnzymeBackend`. It uses the identity
 
 ```math
 \nabla_\eta \mathbb{E}_q[f(x)] = \mathbb{E}_q[f(x) \nabla_\eta \log q(x;\eta)]
@@ -521,7 +521,7 @@ and lets Enzyme.jl compute the gradient automatically by differentiating the clo
 
 #### Example: Gamma projected to LogNormal
 
-For this pair the `ClosedFormExpectation` is available but there is no hand-coded `ClosedWilliamsProduct`, so the default `ClosedFormStrategy()` would fail. With `EnzymeBackend` it works out of the box:
+For this pair the expectation has a closed form but its gradient is not implemented, so the default `ClosedFormStrategy()` fails. With `EnzymeBackend` it works:
 
 ```@example enzymebackend
 using ExponentialFamilyProjection, ClosedFormExpectations, Enzyme
