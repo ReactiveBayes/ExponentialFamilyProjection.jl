@@ -1,4 +1,5 @@
 [deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 BayesBase = "b4ee3484-f114-42fe-b91c-797d54a0c67e"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ClosedFormExpectations = "70ff922c-62d4-418d-abfc-e284e489b734"

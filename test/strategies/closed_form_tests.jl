@@ -24,17 +24,17 @@ end
     @test s2 isa ClosedFormStrategy{Nothing}
     @test s2.backend === nothing
 
-    # EnzymeBackend (reverse mode, default)
-    s3 = ClosedFormStrategy(EnzymeBackend())
-    @test s3 isa ClosedFormStrategy{EnzymeBackend{EnzymeReverse}}
-    @test s3.backend isa EnzymeBackend
-    @test s3.backend.mode isa EnzymeReverse
+    # An automatic differentiation backend, reverse mode by default
+    using ADTypes: AutoEnzyme
+    using Enzyme: Forward
+    s3 = ClosedFormStrategy(AutoEnzyme())
+    @test s3 isa ClosedFormStrategy{<:AutoEnzyme}
+    @test s3.backend isa AutoEnzyme
 
-    # EnzymeBackend (forward mode)
-    s4 = ClosedFormStrategy(EnzymeBackend(EnzymeForward()))
-    @test s4 isa ClosedFormStrategy{EnzymeBackend{EnzymeForward}}
-    @test s4.backend isa EnzymeBackend
-    @test s4.backend.mode isa EnzymeForward
+    # forward mode
+    s4 = ClosedFormStrategy(AutoEnzyme(mode = Forward))
+    @test s4 isa ClosedFormStrategy{<:AutoEnzyme}
+    @test s4.backend.mode === Forward
 end
 
 @testitem "ClosedFormStrategy create_state!" begin
@@ -371,10 +371,10 @@ end
             parameters = ProjectionParameters(
                 strategy = ClosedFormStrategy(),
                 niterations = 50,
-                tolerance = 1e-5
-            )
+                tolerance = 1e-5,
+            ),
         ),
-        target
+        target,
     )
 
     @test result isa NormalMeanVariance
@@ -408,11 +408,11 @@ end
             parameters = ProjectionParameters(
                 strategy = ClosedFormStrategy(),
                 niterations = 50,
-                tolerance = 1e-5
-            )
+                tolerance = 1e-5,
+            ),
         ),
         target;
-        initialpoint = initial_dist
+        initialpoint = initial_dist,
     )
 
     @test result isa GammaDistributionsFamily
@@ -428,11 +428,11 @@ end
             parameters = ProjectionParameters(
                 strategy = ControlVariateStrategy(nsamples = 500),
                 niterations = 50,
-                tolerance = 1e-4
-            )
+                tolerance = 1e-4,
+            ),
         ),
         target;
-        initialpoint = initial_dist
+        initialpoint = initial_dist,
     )
 
     # Should be close
@@ -461,21 +461,21 @@ end
         NormalMeanVariance;
         parameters = ProjectionParameters(
             strategy = ClosedFormStrategy(),
-            niterations = 100
-        )
+            niterations = 100,
+        ),
     )
 
     prj_mc = ProjectedTo(
         NormalMeanVariance;
         parameters = ProjectionParameters(
             strategy = ControlVariateStrategy(nsamples = 1000),
-            niterations = 100
-        )
+            niterations = 100,
+        ),
     )
 
     # Benchmark with @belapsed for robust timing
-    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint=$initial)
-    t_mc = @belapsed project_to($prj_mc, $target; initialpoint=$initial)
+    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint = $initial)
+    t_mc = @belapsed project_to($prj_mc, $target; initialpoint = $initial)
 
     # Get results for accuracy testing
     res_analytic = project_to(prj_analytic, target; initialpoint = initial)
@@ -540,7 +540,8 @@ end
 
     # Get the extension module
     # The extension should be loaded because both ExponentialFamilyProjection and ClosedFormExpectations are loaded
-    ClosedFormExpectationsExt = Base.get_extension(ExponentialFamilyProjection, :ClosedFormExpectationsExt)
+    ClosedFormExpectationsExt =
+        Base.get_extension(ExponentialFamilyProjection, :ClosedFormExpectationsExt)
 
     @test !isnothing(ClosedFormExpectationsExt)
 
@@ -561,24 +562,25 @@ end
         strategy,
         base_measure,
         q_dist,
-        grad_target
+        grad_target,
     )
 
     # The function should return grad_target exactly for ConstantBaseMeasure
     @test result === grad_target
 end
 
-@testitem "ClosedFormStrategy with EnzymeBackend: Gamma projected to LogNormal" begin
+@testitem "ClosedFormStrategy with AutoEnzyme: Gamma projected to LogNormal" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     using ExponentialFamilyProjection: ControlVariateStrategy
     using Enzyme
+    using ADTypes: AutoEnzyme
     using Distributions
     using ExponentialFamily
     using StableRNGs
 
     # Gamma → LogNormal: the expectation has a closed form, but its gradient is not implemented.
-    # The EnzymeBackend computes the gradient by differentiating the expectation, via
+    # ClosedFormAD(AutoEnzyme()) computes the gradient by differentiating the expectation, via
     #   ∇_η E_q[f] = E_q[f ∇_η log q]
     target_dist = Gamma(2.0, 1.0)
     target = Base.Fix1(logpdf, target_dist)
@@ -587,7 +589,7 @@ end
         ProjectedTo(
             LogNormal;
             parameters = ProjectionParameters(
-                strategy = ClosedFormStrategy(EnzymeBackend()),
+                strategy = ClosedFormStrategy(AutoEnzyme()),
                 niterations = 100,
                 tolerance = 1e-6,
             ),
@@ -616,10 +618,11 @@ end
     @test isapprox(result_enzyme.σ, result_cv.σ, atol = 1e-2)
 end
 
-@testitem "ClosedFormStrategy with EnzymeForward: Gamma projected to LogNormal" begin
+@testitem "ClosedFormStrategy with forward-mode AutoEnzyme: Gamma projected to LogNormal" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     using Enzyme
+    using ADTypes: AutoEnzyme
     using Distributions
     using ExponentialFamily
 
@@ -630,7 +633,7 @@ end
         ProjectedTo(
             LogNormal;
             parameters = ProjectionParameters(
-                strategy = ClosedFormStrategy(EnzymeBackend(EnzymeForward())),
+                strategy = ClosedFormStrategy(AutoEnzyme(mode = Enzyme.Forward)),
                 niterations = 100,
                 tolerance = 1e-6,
             ),
@@ -642,7 +645,7 @@ end
         ProjectedTo(
             LogNormal;
             parameters = ProjectionParameters(
-                strategy = ClosedFormStrategy(EnzymeBackend()),
+                strategy = ClosedFormStrategy(AutoEnzyme()),
                 niterations = 100,
                 tolerance = 1e-6,
             ),
@@ -655,10 +658,11 @@ end
     @test isapprox(result_fwd.σ, result_rev.σ, atol = 1e-4)
 end
 
-@testitem "ClosedFormStrategy with EnzymeBackend: LogNormal projected to LogNormal (exact)" begin
+@testitem "ClosedFormStrategy with AutoEnzyme: LogNormal projected to LogNormal (exact)" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     using Enzyme
+    using ADTypes: AutoEnzyme
     using Distributions
 
     # LogNormal → LogNormal should recover the target exactly
@@ -669,7 +673,7 @@ end
             ProjectedTo(
                 LogNormal;
                 parameters = ProjectionParameters(
-                    strategy = ClosedFormStrategy(EnzymeBackend()),
+                    strategy = ClosedFormStrategy(AutoEnzyme()),
                     niterations = 200,
                     tolerance = 1e-8,
                 ),

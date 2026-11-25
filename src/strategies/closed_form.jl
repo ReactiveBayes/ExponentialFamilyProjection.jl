@@ -7,11 +7,14 @@ A projection strategy that computes the gradient of the cross-entropy term
 \$\\mathbb{E}_{q_\\eta}[\\log \\tilde{p}(x)]\$ in closed form, with `ClosedFormExpectations.jl`.
 The gradient has no Monte Carlo variance, unlike the gradient of `ControlVariateStrategy`.
 
-The gradient is `BayesBase.expectation_gradient(ClosedFormExpectation(backend), f, q)`, the gradient
-of the expectation with respect to the natural parameters of `q`. With `backend = nothing`, the
-default, it uses the gradients that `ClosedFormExpectations.jl` implements by hand. With an
-`EnzymeBackend`, Enzyme.jl differentiates the closed-form expectation instead, so the strategy also
-works for pairs whose expectation has a closed form but whose gradient is not implemented.
+The gradient is `BayesBase.expectation_gradient(backend, f, q)`, the gradient of the expectation
+with respect to the natural parameters of `q`. With `backend = nothing`, the default, it uses the
+gradients that `ClosedFormExpectations.jl` implements by hand, `ClosedFormExpectation()`. With an
+automatic differentiation backend from ADTypes.jl, such as `AutoEnzyme()` with Enzyme.jl loaded,
+it uses `BayesBase.ExpectationFirstOf(ClosedFormExpectation(), ClosedFormAD(backend))`: the
+hand-written gradient where there is one, and otherwise the derivative of the closed-form
+expectation, so the strategy also works for pairs whose expectation has a closed form but whose
+gradient is not implemented.
 
 # Requirements
 
@@ -41,7 +44,7 @@ Use `ClosedFormStrategy` when:
 - You want faster convergence with fewer iterations
 - Reproducibility is critical (no random sampling)
 
-Use `ClosedFormStrategy(EnzymeBackend())` when the expectation has a closed form for the pair but
+Use `ClosedFormStrategy(AutoEnzyme())` when the expectation has a closed form for the pair but
 its gradient is not implemented. Enzyme then differentiates the expectation, using
 \$\\nabla_\\eta \\mathbb{E}_q[f] = \\mathbb{E}_q[f \\nabla_\\eta \\log q]\$.
 
@@ -69,6 +72,7 @@ result = project_to(
 
 ```julia
 using ExponentialFamilyProjection, ClosedFormExpectations, Enzyme
+using ADTypes: AutoEnzyme
 using Distributions
 
 # Gamma → LogNormal: the expectation has a closed form but its gradient is not implemented,
@@ -79,7 +83,7 @@ result = project_to(
     ProjectedTo(
         LogNormal;
         parameters = ProjectionParameters(
-            strategy = ClosedFormStrategy(EnzymeBackend()),
+            strategy = ClosedFormStrategy(AutoEnzyme()),
             niterations = 50
         )
     ),
@@ -93,8 +97,9 @@ This estimator was proposed in [Lukashchuk et al., 2024](https://proceedings.mlr
 
 !!! note
     Without a backend, the strategy needs a closed-form gradient for the pair,
-    `BayesBase.supports_expectation_gradient(ClosedFormExpectation(), f, q)`. With an
-    `EnzymeBackend`, a closed-form expectation is enough. See the `ClosedFormExpectations.jl`
+    `BayesBase.supports_expectation_gradient(ClosedFormExpectation(), f, q)`. With
+    `AutoEnzyme()`, a closed-form expectation under a univariate exponential family member is
+    enough. See the `ClosedFormExpectations.jl`
     documentation for the supported pairs.
 """
 struct ClosedFormStrategy{B}

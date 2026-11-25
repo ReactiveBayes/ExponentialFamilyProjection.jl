@@ -16,6 +16,14 @@ import ExponentialFamily: ProductOf
 
 ExponentialFamilyProjection.get_nsamples(::ClosedFormStrategy) = 0
 
+# The backend of the gradient: ClosedFormExpectations' hand-written gradients, or, with an
+# automatic differentiation backend, those first and the derivative of the closed-form
+# expectation where there is none
+gradient_backend(::ClosedFormStrategy{Nothing}) = ClosedFormExpectation()
+gradient_backend(
+    strategy::ClosedFormStrategy{<:ClosedFormExpectations.ADTypes.AbstractADType},
+) = BayesBase.ExpectationFirstOf(ClosedFormExpectation(), ClosedFormAD(strategy.backend))
+
 function logbasemeasure_correction(
     ::ClosedFormStrategy,
     ::ExponentialFamily.ConstantBaseMeasure,
@@ -52,11 +60,8 @@ function ExponentialFamilyProjection.compute_gradient!(
     )
 
     # Compute ∇_η E[log p̃ * (T - μ)], the gradient of E_q[log p̃] in the natural parameters
-    grad_target = BayesBase.expectation_gradient(
-        ClosedFormExpectation(strategy.backend),
-        target_fn,
-        q_dist,
-    )
+    grad_target =
+        BayesBase.expectation_gradient(gradient_backend(strategy), target_fn, q_dist)
     grad_eta = logbasemeasure_correction(
         strategy,
         ExponentialFamily.isbasemeasureconstant(q_dist),

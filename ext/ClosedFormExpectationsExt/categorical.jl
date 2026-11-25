@@ -89,7 +89,7 @@ function ExponentialFamilyProjection.compute_gradient!(
     inv_fisher,
 ) where {F}
     gradient = BayesBase.expectation_gradient(
-        ClosedFormExpectation(strategy.backend),
+        gradient_backend(strategy),
         state.target,
         state.current_ef,
     )

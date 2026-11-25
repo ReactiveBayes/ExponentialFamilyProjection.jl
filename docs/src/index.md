@@ -426,9 +426,12 @@ On typical runs we observe a substantial speedup (often around 10×) for Enzyme 
 
 The `ExpectationStrategy` computes the expectations of the projection with a backend of
 BayesBase's expectation protocol. For example, ExpectationApproximations.jl uses Gauss–Hermite
-quadrature for Gaussians, Gauss–Laguerre for Gamma and Gauss–Jacobi for Beta distributions. The
-strategy draws no samples, so the gradient has no variance and the iterations can stop at a
-tight tolerance. Here the target is the posterior of a `Beta(2, 3)` prior after 7 successes in
+quadrature for Gaussians, capped in the number of points as the dimension grows, and
+Gauss–Legendre quadrature in `log x` for Gamma and in `logit x` for Beta distributions. The step
+is a weighted regression of the target's log-density on the sufficient statistics over the
+backend's points, so it does not change when a constant is added to the log-density, and a
+target in the family is projected onto itself. The strategy draws no samples, so the step has no
+variance; its accuracy is that of the quadrature on the target. Here the target is the posterior of a `Beta(2, 3)` prior after 7 successes in
 20 trials, which is `Beta(9, 16)`:
 
 ```julia
@@ -511,7 +514,7 @@ The `ClosedFormStrategy` typically provides:
 
 ### Autograd-backed closed-form strategy (Enzyme.jl)
 
-When `ClosedFormExpectations.jl` has a closed form for the expectation ``\mathbb{E}_q[f]`` of a target–variational pair, `BayesBase.expectation(ClosedFormExpectation(), f, q)`, but not for its gradient ``\mathbb{E}_q[f \nabla_\eta \log q]``, `BayesBase.expectation_gradient(ClosedFormExpectation(), f, q)`, you can still use `ClosedFormStrategy` by passing an `EnzymeBackend`. It uses the identity
+When `ClosedFormExpectations.jl` has a closed form for the expectation ``\mathbb{E}_q[f]`` of a target–variational pair, `BayesBase.expectation(ClosedFormExpectation(), f, q)`, but not for its gradient ``\mathbb{E}_q[f \nabla_\eta \log q]``, `BayesBase.expectation_gradient(ClosedFormExpectation(), f, q)`, you can still use `ClosedFormStrategy` by passing an automatic differentiation backend, `AutoEnzyme()` from ADTypes.jl with Enzyme.jl loaded. The strategy then uses the hand-written gradient where there is one and otherwise `ClosedFormAD(AutoEnzyme())`, which relies on the identity
 
 ```math
 \nabla_\eta \mathbb{E}_q[f(x)] = \mathbb{E}_q[f(x) \nabla_\eta \log q(x;\eta)]
@@ -521,10 +524,11 @@ and lets Enzyme.jl compute the gradient automatically by differentiating the clo
 
 #### Example: Gamma projected to LogNormal
 
-For this pair the expectation has a closed form but its gradient is not implemented, so the default `ClosedFormStrategy()` fails. With `EnzymeBackend` it works:
+For this pair the expectation has a closed form but its gradient is not implemented, so the default `ClosedFormStrategy()` fails. With `AutoEnzyme()` it works:
 
 ```@example enzymebackend
 using ExponentialFamilyProjection, ClosedFormExpectations, Enzyme
+using ADTypes: AutoEnzyme
 using ExponentialFamily, BayesBase, Distributions
 using Plots
 
@@ -534,7 +538,7 @@ result = project_to(
     ProjectedTo(
         LogNormal;
         parameters = ProjectionParameters(
-            strategy = ClosedFormStrategy(EnzymeBackend()),
+            strategy = ClosedFormStrategy(AutoEnzyme()),
             niterations = 100,
             tolerance = 1e-6,
         ),
@@ -552,12 +556,12 @@ plot!(xs, x -> pdf(result, x),
       linestyle=:dash, color=:red)
 xlabel!("x")
 ylabel!("Density")
-title!("Gamma → LogNormal (EnzymeBackend)")
+title!("Gamma → LogNormal (AutoEnzyme)")
 ```
 
-The `EnzymeBackend` supports both reverse and forward mode:
-- `ClosedFormStrategy(EnzymeBackend())` — reverse mode (default)
-- `ClosedFormStrategy(EnzymeBackend(EnzymeForward()))` — forward mode
+Enzyme runs in reverse mode by default, and in forward mode with `AutoEnzyme(mode = Enzyme.Forward)`:
+- `ClosedFormStrategy(AutoEnzyme())` — reverse mode (default)
+- `ClosedFormStrategy(AutoEnzyme(mode = Enzyme.Forward))` — forward mode
 
 ### Projection with samples
 
