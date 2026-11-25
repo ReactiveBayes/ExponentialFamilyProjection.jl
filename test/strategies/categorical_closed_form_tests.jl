@@ -103,7 +103,7 @@ end
 @testitem "Categorical closed-form public projection" begin
     using ClosedFormExpectations, ExponentialFamily, ExponentialFamilyManifolds, Manopt
     using BayesBase: ProductOf
-    using Distributions: probs
+    using Distributions: probs, logpdf
     using StatsFuns: softmax
     import ExponentialFamilyProjection as EFP
 
@@ -133,8 +133,13 @@ end
         scores = [0.2k - 0.1k^2 for k = 1:K]
         expected = softmax(scores)
         target = Categorical(expected)
-        for argument in
-            (target, Logpdf(target), k -> scores[k], CategoryLogScore(scores), identity)
+        for argument in (
+            target,
+            Base.Fix1(logpdf, target),
+            k -> scores[k],
+            CategoryLogScore(scores),
+            identity,
+        )
             wanted = argument === identity ? softmax(collect(1.0:K)) : expected
             result = project_to(projection(K), argument; initialpoint = oldq)
             @test probs(result) ≈ wanted atol = 1e-10
@@ -192,32 +197,32 @@ end
 
     # Simple case: Normal to Normal
     target_dist = Categorical([0.25, 0.25, 0.25, 0.25])
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     initial = Categorical([0.125, 0.125, 0.125, 0.625])
 
     # Create projection objects
     prj_analytic = ProjectedTo(
         Categorical;
-        conditioner=4,
+        conditioner = 4,
         parameters = ProjectionParameters(
             strategy = ClosedFormStrategy(),
-            niterations = 1000
-        )
+            niterations = 1000,
+        ),
     )
 
     prj_mc = ProjectedTo(
         Categorical;
-        conditioner=4,
+        conditioner = 4,
         parameters = ProjectionParameters(
             strategy = ControlVariateStrategy(nsamples = 100),
-            niterations = 1000
-        )
+            niterations = 1000,
+        ),
     )
 
     # Benchmark with @belapsed for robust timing
-    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint=$initial)
-    t_mc = @belapsed project_to($prj_mc, $target; initialpoint=$initial)
+    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint = $initial)
+    t_mc = @belapsed project_to($prj_mc, $target; initialpoint = $initial)
 
     # Get results for accuracy testing
     res_analytic = project_to(prj_analytic, target; initialpoint = initial)
@@ -225,7 +230,8 @@ end
 
     # Analytic should be more accurate (converge to exact target) and be closer to the target in terms of probabilities than MC sampling
     @test isapprox(res_analytic, target_dist; atol = 1e-5)
-    @test norm(probs(res_analytic) - probs(target_dist)) < norm(probs(res_mc) - probs(target_dist))
+    @test norm(probs(res_analytic) - probs(target_dist)) <
+          norm(probs(res_mc) - probs(target_dist))
 
     # ClosedFormStrategy should be faster than MC sampling
     @test t_analytic < t_mc

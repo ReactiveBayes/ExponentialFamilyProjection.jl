@@ -42,6 +42,7 @@ The optimization procedure requires computing the expectation of the gradient to
 ExponentialFamilyProjection.DefaultStrategy
 ExponentialFamilyProjection.ControlVariateStrategy
 ExponentialFamilyProjection.ClosedFormStrategy
+ExponentialFamilyProjection.ExpectationStrategy
 ExponentialFamilyProjection.MLEStrategy
 ExponentialFamilyProjection.BonnetStrategy
 ExponentialFamilyProjection.GaussNewton
@@ -421,6 +422,27 @@ round.((speedup, t_manual, t_enzyme); digits = 3)
 
 On typical runs we observe a substantial speedup (often around 10×) for Enzyme while maintaining the same result.
 
+### Quadrature strategy (deterministic, any backend)
+
+The `ExpectationStrategy` computes the expectations of the projection with a backend of
+BayesBase's expectation protocol. For example, ExpectationApproximations.jl uses Gauss–Hermite
+quadrature for Gaussians, capped in the number of points as the dimension grows, and
+Gauss–Legendre quadrature in `log x` for Gamma and in `logit x` for Beta distributions. The step
+is a weighted regression of the target's log-density on the sufficient statistics over the
+backend's points, so it does not change when a constant is added to the log-density, and a
+target in the family is projected onto itself. The strategy draws no samples, so the step has no
+variance; its accuracy is that of the quadrature on the target. Here the target is the posterior of a `Beta(2, 3)` prior after 7 successes in
+20 trials, which is `Beta(9, 16)`:
+
+```julia
+using ExpectationApproximations
+
+# Beta(2, 3) times 7 successes in 20 trials: the projection is Beta(9, 16)
+logp(p) = logpdf(Beta(2.0, 3.0), p) + 7 * log(p) + 13 * log1p(-p)
+strategy = ExpectationStrategy(ExpectationApproximations.EADefault())
+project_to(ProjectedTo(Beta; parameters = ProjectionParameters(strategy = strategy, niterations = 1000, tolerance = 1e-10)), logp)
+```
+
 ### Closed-form strategy (zero-variance gradients)
 
 The `ClosedFormStrategy` uses `ClosedFormExpectations.jl` to compute exact, analytic gradients without Monte Carlo sampling. This provides "zero-variance" gradients, leading to faster and more accurate convergence compared to sampling-based strategies.
@@ -492,7 +514,7 @@ The `ClosedFormStrategy` typically provides:
 
 ### Autograd-backed closed-form strategy (Enzyme.jl)
 
-When `ClosedFormExpectations.jl` provides `ClosedFormExpectation` (i.e. ``\mathbb{E}_q[f]``) for a target–variational pair but does **not** yet have a hand-coded `ClosedWilliamsProduct` (i.e. ``\mathbb{E}_q[f \nabla_\eta \log q]``), you can still use `ClosedFormStrategy` by passing an `EnzymeBackend`. This exploits the identity
+When `ClosedFormExpectations.jl` has a closed form for the expectation ``\mathbb{E}_q[f]`` of a target–variational pair, `BayesBase.expectation(ClosedFormExpectation(), f, q)`, but not for its gradient ``\mathbb{E}_q[f \nabla_\eta \log q]``, `BayesBase.expectation_gradient(ClosedFormExpectation(), f, q)`, you can still use `ClosedFormStrategy` by passing an automatic differentiation backend, `AutoEnzyme()` from ADTypes.jl with Enzyme.jl loaded. The strategy then uses the hand-written gradient where there is one and otherwise `ClosedFormAD(AutoEnzyme())`, which relies on the identity
 
 ```math
 \nabla_\eta \mathbb{E}_q[f(x)] = \mathbb{E}_q[f(x) \nabla_\eta \log q(x;\eta)]
@@ -502,10 +524,11 @@ and lets Enzyme.jl compute the gradient automatically by differentiating the clo
 
 #### Example: Gamma projected to LogNormal
 
-For this pair the `ClosedFormExpectation` is available but there is no hand-coded `ClosedWilliamsProduct`, so the default `ClosedFormStrategy()` would fail. With `EnzymeBackend` it works out of the box:
+For this pair the expectation has a closed form but its gradient is not implemented, so the default `ClosedFormStrategy()` fails. With `AutoEnzyme()` it works:
 
 ```@example enzymebackend
 using ExponentialFamilyProjection, ClosedFormExpectations, Enzyme
+using ADTypes: AutoEnzyme
 using ExponentialFamily, BayesBase, Distributions
 using Plots
 
@@ -515,7 +538,7 @@ result = project_to(
     ProjectedTo(
         LogNormal;
         parameters = ProjectionParameters(
-            strategy = ClosedFormStrategy(EnzymeBackend()),
+            strategy = ClosedFormStrategy(AutoEnzyme()),
             niterations = 100,
             tolerance = 1e-6,
         ),
@@ -533,12 +556,12 @@ plot!(xs, x -> pdf(result, x),
       linestyle=:dash, color=:red)
 xlabel!("x")
 ylabel!("Density")
-title!("Gamma → LogNormal (EnzymeBackend)")
+title!("Gamma → LogNormal (AutoEnzyme)")
 ```
 
-The `EnzymeBackend` supports both reverse and forward mode:
-- `ClosedFormStrategy(EnzymeBackend())` — reverse mode (default)
-- `ClosedFormStrategy(EnzymeBackend(EnzymeForward()))` — forward mode
+Enzyme runs in reverse mode by default, and in forward mode with `AutoEnzyme(mode = Enzyme.Forward)`:
+- `ClosedFormStrategy(AutoEnzyme())` — reverse mode (default)
+- `ClosedFormStrategy(AutoEnzyme(mode = Enzyme.Forward))` — forward mode
 
 ### Projection with samples
 

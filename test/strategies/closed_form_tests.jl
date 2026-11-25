@@ -24,17 +24,17 @@ end
     @test s2 isa ClosedFormStrategy{Nothing}
     @test s2.backend === nothing
 
-    # EnzymeBackend (reverse mode, default)
-    s3 = ClosedFormStrategy(EnzymeBackend())
-    @test s3 isa ClosedFormStrategy{EnzymeBackend{EnzymeReverse}}
-    @test s3.backend isa EnzymeBackend
-    @test s3.backend.mode isa EnzymeReverse
+    # An automatic differentiation backend, reverse mode by default
+    using ADTypes: AutoEnzyme
+    using Enzyme: Forward
+    s3 = ClosedFormStrategy(AutoEnzyme())
+    @test s3 isa ClosedFormStrategy{<:AutoEnzyme}
+    @test s3.backend isa AutoEnzyme
 
-    # EnzymeBackend (forward mode)
-    s4 = ClosedFormStrategy(EnzymeBackend(EnzymeForward()))
-    @test s4 isa ClosedFormStrategy{EnzymeBackend{EnzymeForward}}
-    @test s4.backend isa EnzymeBackend
-    @test s4.backend.mode isa EnzymeForward
+    # forward mode
+    s4 = ClosedFormStrategy(AutoEnzyme(mode = Forward))
+    @test s4 isa ClosedFormStrategy{<:AutoEnzyme}
+    @test s4.backend.mode === Forward
 end
 
 @testitem "ClosedFormStrategy create_state!" begin
@@ -55,8 +55,8 @@ end
         c = getconditioner(ef)
         M = ExponentialFamilyManifolds.get_natural_manifold(T, d, c)
 
-        # Target wrapped in Logpdf
-        target = Logpdf(dist)
+        # The target as its log-density
+        target = Base.Fix1(logpdf, dist)
 
         # Test without supplementary parameters
         state1 = create_state!(ClosedFormStrategy(), M, parameters, target, ef, ())
@@ -96,7 +96,7 @@ end
 
     for dist in distributions
         target_dist = dist
-        target = Logpdf(target_dist)
+        target = Base.Fix1(logpdf, target_dist)
 
         ef = convert(ExponentialFamilyDistribution, dist)
         T = ExponentialFamily.exponential_family_typetag(ef)
@@ -165,9 +165,9 @@ end
     result_strat, result_arg = preprocess_strategy_argument(strategy, closure_with_dist)
     @test result_strat === strategy
 
-    # The function should extract the captured Distribution and wrap it in Logpdf
-    @test result_arg isa Logpdf
-    @test result_arg.dist === dist1
+    # The function should extract the captured Distribution and take its log-density
+    @test result_arg isa Base.Fix1{typeof(logpdf)}
+    @test result_arg.x === dist1
 end
 
 @testitem "ClosedFormStrategy argument preprocessing for ProductOf in closure" begin
@@ -192,9 +192,9 @@ end
     result_strat, result_arg = preprocess_strategy_argument(strategy, closure_with_product)
     @test result_strat === strategy
 
-    # The function should extract the captured ProductOf and wrap it in Logpdf
-    @test result_arg isa Logpdf
-    @test result_arg.dist === prod
+    # The function should extract the captured ProductOf and take its log-density
+    @test result_arg isa Base.Fix1{typeof(logpdf)}
+    @test result_arg.x === prod
 end
 
 @testitem "ClosedFormStrategy argument preprocessing for direct ProductOf" begin
@@ -213,8 +213,24 @@ end
 
     result_strat, result_arg = preprocess_strategy_argument(strategy, prod)
     @test result_strat === strategy
-    @test result_arg isa Logpdf
-    @test result_arg.dist === prod
+    @test result_arg isa Base.Fix1{typeof(logpdf)}
+    @test result_arg.x === prod
+end
+
+@testitem "ClosedFormStrategy argument preprocessing for a log-density" begin
+    using ExponentialFamilyProjection
+    using ClosedFormExpectations
+    using Distributions
+    import ExponentialFamilyProjection: preprocess_strategy_argument
+
+    strategy = ClosedFormStrategy()
+    target = Base.Fix1(logpdf, Normal(0, 1))
+
+    # `Base.Fix1(logpdf, p)` is a function, but it is already the integrand ClosedFormExpectations
+    # takes, so it passes unchanged instead of being read as a closure
+    result_strat, result_arg = preprocess_strategy_argument(strategy, target)
+    @test result_strat === strategy
+    @test result_arg === target
 end
 
 @testitem "ClosedFormStrategy argument preprocessing for plain function should error" begin
@@ -246,8 +262,8 @@ end
     # Case 4: Distribution directly (non-Function argument)
     result_strat, result_arg = preprocess_strategy_argument(strategy, dist1)
     @test result_strat === strategy
-    @test result_arg isa ClosedFormExpectations.Logpdf
-    @test result_arg.dist == dist1
+    @test result_arg isa Base.Fix1{typeof(logpdf)}
+    @test result_arg.x == dist1
 end
 
 @testitem "ClosedFormStrategy cost computation" begin
@@ -263,7 +279,7 @@ end
 
     # Target: Normal(0, 1)
     target_dist = Normal(0.0, 1.0)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     # Variational: Normal(1, 1)
     # KL(q || p) where p=N(0,1), q=N(1,1) (variances equal)
@@ -307,7 +323,7 @@ end
 
     # Simple test: project Normal to Normal
     target_dist = Normal(2.0, 1.0)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     # Start from a different point
     q_dist = NormalMeanVariance(0.0, 1.0)
@@ -346,7 +362,7 @@ end
     using LinearAlgebra
 
     target_dist = LogGamma(20.0, 1.0)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     # Project with ClosedFormStrategy
     result = project_to(
@@ -355,10 +371,10 @@ end
             parameters = ProjectionParameters(
                 strategy = ClosedFormStrategy(),
                 niterations = 50,
-                tolerance = 1e-5
-            )
+                tolerance = 1e-5,
+            ),
         ),
-        target
+        target,
     )
 
     @test result isa NormalMeanVariance
@@ -381,7 +397,7 @@ end
 
     # Target: LogNormal(μ=1.0, σ=0.5)
     target_dist = LogNormal(1.0, 0.5)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     # Initial: Gamma(2.0, 2.0)
     initial_dist = Gamma(2.0, 2.0)
@@ -392,11 +408,11 @@ end
             parameters = ProjectionParameters(
                 strategy = ClosedFormStrategy(),
                 niterations = 50,
-                tolerance = 1e-5
-            )
+                tolerance = 1e-5,
+            ),
         ),
         target;
-        initialpoint = initial_dist
+        initialpoint = initial_dist,
     )
 
     @test result isa GammaDistributionsFamily
@@ -412,11 +428,11 @@ end
             parameters = ProjectionParameters(
                 strategy = ControlVariateStrategy(nsamples = 500),
                 niterations = 50,
-                tolerance = 1e-4
-            )
+                tolerance = 1e-4,
+            ),
         ),
         target;
-        initialpoint = initial_dist
+        initialpoint = initial_dist,
     )
 
     # Should be close
@@ -436,7 +452,7 @@ end
 
     # Simple case: Normal to Normal
     target_dist = NormalMeanVariance(5.0, 2.0)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     initial = NormalMeanVariance(0.0, 1.0)
 
@@ -445,21 +461,21 @@ end
         NormalMeanVariance;
         parameters = ProjectionParameters(
             strategy = ClosedFormStrategy(),
-            niterations = 100
-        )
+            niterations = 100,
+        ),
     )
 
     prj_mc = ProjectedTo(
         NormalMeanVariance;
         parameters = ProjectionParameters(
             strategy = ControlVariateStrategy(nsamples = 1000),
-            niterations = 100
-        )
+            niterations = 100,
+        ),
     )
 
     # Benchmark with @belapsed for robust timing
-    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint=$initial)
-    t_mc = @belapsed project_to($prj_mc, $target; initialpoint=$initial)
+    t_analytic = @belapsed project_to($prj_analytic, $target; initialpoint = $initial)
+    t_mc = @belapsed project_to($prj_mc, $target; initialpoint = $initial)
 
     # Get results for accuracy testing
     res_analytic = project_to(prj_analytic, target; initialpoint = initial)
@@ -491,7 +507,7 @@ end
     # Test that the objective works correctly with ClosedFormStrategy
     strategy = ClosedFormStrategy()
     target_dist = Normal(2.0, 1.0)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     q_dist = NormalMeanVariance(0.0, 1.0)
     ef = convert(ExponentialFamilyDistribution, q_dist)
@@ -524,7 +540,8 @@ end
 
     # Get the extension module
     # The extension should be loaded because both ExponentialFamilyProjection and ClosedFormExpectations are loaded
-    ClosedFormExpectationsExt = Base.get_extension(ExponentialFamilyProjection, :ClosedFormExpectationsExt)
+    ClosedFormExpectationsExt =
+        Base.get_extension(ExponentialFamilyProjection, :ClosedFormExpectationsExt)
 
     @test !isnothing(ClosedFormExpectationsExt)
 
@@ -545,33 +562,34 @@ end
         strategy,
         base_measure,
         q_dist,
-        grad_target
+        grad_target,
     )
 
     # The function should return grad_target exactly for ConstantBaseMeasure
     @test result === grad_target
 end
 
-@testitem "ClosedFormStrategy with EnzymeBackend: Gamma projected to LogNormal" begin
+@testitem "ClosedFormStrategy with AutoEnzyme: Gamma projected to LogNormal" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     using ExponentialFamilyProjection: ControlVariateStrategy
     using Enzyme
+    using ADTypes: AutoEnzyme
     using Distributions
     using ExponentialFamily
     using StableRNGs
 
-    # Gamma → LogNormal: ClosedFormExpectation is implemented but ClosedWilliamsProduct is not.
-    # The EnzymeBackend computes the Williams product by autodiffing the expectation via
+    # Gamma → LogNormal: the expectation has a closed form, but its gradient is not implemented.
+    # ClosedFormAD(AutoEnzyme()) computes the gradient by differentiating the expectation, via
     #   ∇_η E_q[f] = E_q[f ∇_η log q]
     target_dist = Gamma(2.0, 1.0)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     result_enzyme = project_to(
         ProjectedTo(
             LogNormal;
             parameters = ProjectionParameters(
-                strategy = ClosedFormStrategy(EnzymeBackend()),
+                strategy = ClosedFormStrategy(AutoEnzyme()),
                 niterations = 100,
                 tolerance = 1e-6,
             ),
@@ -600,21 +618,22 @@ end
     @test isapprox(result_enzyme.σ, result_cv.σ, atol = 1e-2)
 end
 
-@testitem "ClosedFormStrategy with EnzymeForward: Gamma projected to LogNormal" begin
+@testitem "ClosedFormStrategy with forward-mode AutoEnzyme: Gamma projected to LogNormal" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     using Enzyme
+    using ADTypes: AutoEnzyme
     using Distributions
     using ExponentialFamily
 
     target_dist = Gamma(3.0, 2.0)
-    target = Logpdf(target_dist)
+    target = Base.Fix1(logpdf, target_dist)
 
     result_fwd = project_to(
         ProjectedTo(
             LogNormal;
             parameters = ProjectionParameters(
-                strategy = ClosedFormStrategy(EnzymeBackend(EnzymeForward())),
+                strategy = ClosedFormStrategy(AutoEnzyme(mode = Enzyme.Forward)),
                 niterations = 100,
                 tolerance = 1e-6,
             ),
@@ -626,7 +645,7 @@ end
         ProjectedTo(
             LogNormal;
             parameters = ProjectionParameters(
-                strategy = ClosedFormStrategy(EnzymeBackend()),
+                strategy = ClosedFormStrategy(AutoEnzyme()),
                 niterations = 100,
                 tolerance = 1e-6,
             ),
@@ -639,10 +658,11 @@ end
     @test isapprox(result_fwd.σ, result_rev.σ, atol = 1e-4)
 end
 
-@testitem "ClosedFormStrategy with EnzymeBackend: LogNormal projected to LogNormal (exact)" begin
+@testitem "ClosedFormStrategy with AutoEnzyme: LogNormal projected to LogNormal (exact)" begin
     using ExponentialFamilyProjection
     using ClosedFormExpectations
     using Enzyme
+    using ADTypes: AutoEnzyme
     using Distributions
 
     # LogNormal → LogNormal should recover the target exactly
@@ -653,7 +673,7 @@ end
             ProjectedTo(
                 LogNormal;
                 parameters = ProjectionParameters(
-                    strategy = ClosedFormStrategy(EnzymeBackend()),
+                    strategy = ClosedFormStrategy(AutoEnzyme()),
                     niterations = 200,
                     tolerance = 1e-8,
                 ),

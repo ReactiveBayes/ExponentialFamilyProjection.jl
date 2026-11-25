@@ -130,6 +130,7 @@ include("strategies/mle.jl")
 include("strategies/specialization/categorical.jl")
 include("strategies/default.jl")
 include("strategies/closed_form.jl")
+include("strategies/expectation.jl")
 # Bonnet strategy
 include("strategies/bonnet/naive_grad_hess.jl")
 include("strategies/bonnet/bonnet_logpdf.jl")
